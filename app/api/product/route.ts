@@ -38,12 +38,24 @@ export async function GET(req: NextRequest) {
       ctx.allowed_company_ids = [companyId]; 
     }
 
-    const data = await rpc(base, '/web/dataset/call_kw', {
-      model: 'product.product',
-      method: 'search_read',
-      args: [[['barcode', '=', code]], ['id', 'name', 'barcode', 'default_code', 'qty_available', 'free_qty']],
-      kwargs: { limit: 1, context: ctx },
-    }, cookieStr);
+    const data = await rpc(
+      base,
+      '/web/dataset/call_kw',
+      {
+        model: 'product.product',
+        method: 'search_read',
+        args: [
+          [
+            '|', // OR 条件
+            ['barcode', '=', code],
+            ['default_code', '=', code],
+          ],
+          ['id', 'name', 'barcode', 'default_code', 'qty_available', 'free_qty'],
+        ],
+        kwargs: { limit: 1, context: ctx },
+      },
+      cookieStr
+    );
 
     const product = data?.result?.[0] || null;
     return NextResponse.json({ product, companyId });
