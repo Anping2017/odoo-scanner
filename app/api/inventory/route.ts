@@ -170,7 +170,7 @@ export async function POST(req: NextRequest) {
     const resp = NextResponse.json({ ok: true, location_id: locId, method: 'pending' });
     resp.cookies.set('od_location', String(locId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
 
-    // ③ 首先尝试直接使用 stock.quant 的盘点功能
+    // ③ 首先尝试使用 stock.quant 的盘点功能
     try {
       // 先搜索是否存在 quant 记录
       const found = await rpc(base, '/web/dataset/call_kw', {
@@ -182,44 +182,53 @@ export async function POST(req: NextRequest) {
 
       let quantId: number | null = Array.isArray(found?.result) && found.result.length ? found.result[0] : null;
 
-      if (quantId) {
-        // 如果存在 quant 记录，更新库存数量
-        await rpc(base, '/web/dataset/call_kw', {
-          model: 'stock.quant',
-          method: 'write',
-          args: [[quantId], { inventory_quantity: new_qty }],
-          kwargs: { context: ctx },
-        }, cookieStr);
-      } else {
-        // 如果不存在 quant 记录，创建新的 quant 记录
-        // 关键修复：确保包含所有必要字段
+      if (!quantId) {
+        console.log('创建新的 quant 记录');
+        // 如果不存在 quant 记录，先创建 quant 记录
         const created = await rpc(base, '/web/dataset/call_kw', {
           model: 'stock.quant',
           method: 'create',
           args: [[{ 
             product_id, 
-            location_id: locId, 
-            inventory_quantity: new_qty,
-            quantity: 0, // 明确设置当前数量为 0
-            reserved_quantity: 0, // 明确设置保留数量为 0
-            in_date: new Date().toISOString().split('T')[0] // 设置入库日期
+            location_id: locId,
+            quantity: 0, // 初始数量设为0
+            reserved_quantity: 0,
+            in_date: new Date().toISOString().split('T')[0]
           }]],
           kwargs: { context: ctx },
         }, cookieStr);
         quantId = created?.result ?? null;
+        
+        if (!quantId) {
+          throw new Error('无法创建 quant 记录');
+        }
+        
+        // 等待一下确保记录创建完成
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
 
-      if (!quantId) {
-        throw new Error('无法创建或找到 quant 记录');
-      }
-
-      // 应用盘点
+      console.log('更新库存数量:', new_qty);
+      // 更新库存数量
       await rpc(base, '/web/dataset/call_kw', {
+        model: 'stock.quant',
+        method: 'write',
+        args: [[quantId], { inventory_quantity: new_qty }],
+        kwargs: { context: ctx },
+      }, cookieStr);
+
+      // 等待一下确保更新完成
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      console.log('应用盘点');
+      // 应用盘点
+      const applyResult = await rpc(base, '/web/dataset/call_kw', {
         model: 'stock.quant',
         method: 'action_apply_inventory',
         args: [[quantId]],
         kwargs: { context: ctx },
       }, cookieStr);
+
+      console.log('盘点应用结果:', applyResult);
 
       return NextResponse.json({ ok: true, method: 'quant.apply', location_id: locId });
 
@@ -228,6 +237,7 @@ export async function POST(req: NextRequest) {
 
       // ④ 如果新方法失败，回退到旧版向导
       try {
+        console.log('使用旧版向导');
         // 首先创建向导记录
         const wiz = await rpc(base, '/web/dataset/call_kw', {
           model: 'stock.change.product.qty',
@@ -244,6 +254,7 @@ export async function POST(req: NextRequest) {
           throw new Error('无法创建库存调整向导');
         }
 
+        console.log('执行库存调整');
         // 执行库存调整
         const result = await rpc(base, '/web/dataset/call_kw', {
           model: 'stock.change.product.qty',
@@ -251,6 +262,8 @@ export async function POST(req: NextRequest) {
           args: [[wiz.result]],
           kwargs: { context: ctx },
         }, cookieStr);
+
+        console.log('向导执行结果:', result);
 
         return NextResponse.json({ 
           ok: true, 
@@ -271,6 +284,7 @@ export async function POST(req: NextRequest) {
       }
     }
   } catch (e: any) {
+    console.log('POST 请求整体错误:', e);
     return NextResponse.json({ 
       error: e?.message || '库存更新失败',
       stack: process.env.NODE_ENV === 'development' ? e.stack : undefined
