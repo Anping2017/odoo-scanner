@@ -1,6 +1,6 @@
 // app/api/inventory/route.ts
 import { cookies, headers } from 'next/headers';
-import { NextRequest, NextResponse } from 'next/server'; // 添加这行导入
+import { NextRequest, NextResponse } from 'next/server';
 import { resolvePreset } from '@/lib/odooPresets';
 
 // 通用 RPC 封装
@@ -133,6 +133,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: e?.message || '查询历史失败' }, { status: 500 });
   }
 }
+
 // —— POST: 盘点（调整到 new_qty），自动选库位 ——
 export async function POST(req: NextRequest) {
   try {
