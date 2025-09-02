@@ -50,7 +50,16 @@ export async function GET(req: NextRequest) {
             ['barcode', '=', code],
             ['default_code', '=', code],
           ],
-          ['id', 'name', 'barcode', 'default_code', 'qty_available', 'free_qty'],
+          [
+            'id', 
+            'name', 
+            'barcode', 
+            'default_code', 
+            'qty_available', 
+            'free_qty',
+            'standard_price', // 成本价
+            'lst_price'       // 销售价
+          ],
         ],
         kwargs: { limit: 1, context: ctx },
       },
