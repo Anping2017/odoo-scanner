@@ -1,0 +1,11 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/api/company/route": "app/api/company/route.js",
+  "/api/logout/route": "app/api/logout/route.js",
+  "/api/product/route": "app/api/product/route.js",
+  "/api/inventory/route": "app/api/inventory/route.js",
+  "/api/login/route": "app/api/login/route.js",
+  "/api/session/route": "app/api/session/route.js",
+  "/page": "app/page.js",
+  "/scan/page": "app/scan/page.js"
+}
