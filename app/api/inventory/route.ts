@@ -170,193 +170,104 @@ export async function POST(req: NextRequest) {
     const resp = NextResponse.json({ ok: true, location_id: locId, method: 'pending' });
     resp.cookies.set('od_location', String(locId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
 
-    // ③ 核心解决方案：使用库存调整向导
+    // ③ 先尝试使用库存调整向导（适用于新旧版本Odoo）
     try {
-      console.log('尝试库存调整向导');
-      
-      // 首先检查产品是否存在
-      const productCheck = await rpc(base, '/web/dataset/call_kw', {
-        model: 'product.product',
-        method: 'read',
-        args: [[product_id], ['id', 'name']],
+      // 使用库存调整向导
+      const wiz = await rpc(base, '/web/dataset/call_kw', {
+        model: 'stock.change.product.qty',
+        method: 'create',
+        args: [[{ 
+          product_id, 
+          new_quantity: new_qty, 
+          location_id: locId 
+        }]],
         kwargs: { context: ctx },
       }, cookieStr);
-      
-      if (!productCheck?.result?.[0]) {
-        throw new Error(`产品 ID ${product_id} 不存在`);
-      }
 
-      // 检查库存量化记录是否存在
-      const quantCheck = await rpc(base, '/web/dataset/call_kw', {
+      if (wiz?.result) {
+        await rpc(base, '/web/dataset/call_kw', {
+          model: 'stock.change.product.qty',
+          method: 'change_product_qty',
+          args: [[wiz.result]],
+          kwargs: { context: ctx },
+        }, cookieStr);
+        
+        return NextResponse.json({ 
+          ok: true, 
+          method: 'legacy.wizard', 
+          location_id: locId 
+        });
+      }
+    } catch (wizardError) {
+      console.log('向导方法失败，尝试quant方法:', wizardError);
+      // 向导失败，继续尝试quant方法
+    }
+
+    // ④ 如果向导方法失败，尝试quant方法
+    try {
+      // 搜索quant记录
+      const found = await rpc(base, '/web/dataset/call_kw', {
         model: 'stock.quant',
         method: 'search',
         args: [[['product_id', '=', product_id], ['location_id', '=', locId]]],
         kwargs: { limit: 1, context: ctx },
       }, cookieStr);
 
-      const quantExists = Array.isArray(quantCheck?.result) && quantCheck.result.length > 0;
-      console.log('库存量化记录存在:', quantExists);
+      let quantId: number | null = Array.isArray(found?.result) && found.result.length ? found.result[0] : null;
 
-      // 如果量化记录不存在，先创建它
-      if (!quantExists) {
-        console.log('创建库存量化记录');
-        const createQuant = await rpc(base, '/web/dataset/call_kw', {
+      // 如果quant不存在，创建它
+      if (!quantId) {
+        const created = await rpc(base, '/web/dataset/call_kw', {
           model: 'stock.quant',
           method: 'create',
-          args: [[{
-            product_id,
-            location_id: locId,
-            quantity: 0,
-            reserved_quantity: 0,
-            in_date: new Date().toISOString().split('T')[0]
+          args: [[{ 
+            product_id, 
+            location_id: locId, 
+            inventory_quantity: new_qty,
+            inventory_date: new Date().toISOString().split('T')[0] // 添加库存日期
           }]],
           kwargs: { context: ctx },
         }, cookieStr);
-        
-        console.log('量化记录创建结果:', createQuant);
-        
-        // 等待一下确保记录创建完成
-        await new Promise(resolve => setTimeout(resolve, 500));
+        quantId = created?.result ?? null;
+      } else {
+        // 更新现有quant
+        await rpc(base, '/web/dataset/call_kw', {
+          model: 'stock.quant',
+          method: 'write',
+          args: [[quantId], { 
+            inventory_quantity: new_qty,
+            inventory_date: new Date().toISOString().split('T')[0] // 添加库存日期
+          }],
+          kwargs: { context: ctx },
+        }, cookieStr);
       }
 
-      // 方法1: 尝试使用库存调整向导
-      try {
-        console.log('尝试方法1: 库存调整向导');
-        
-        // 创建库存调整向导
-        const wizard = await rpc(base, '/web/dataset/call_kw', {
-          model: 'stock.change.product.qty',
-          method: 'create',
-          args: [[{
-            product_id,
-            new_quantity: new_qty,
-            location_id: locId
-          }]],
+      // 应用库存调整
+      if (quantId) {
+        await rpc(base, '/web/dataset/call_kw', {
+          model: 'stock.quant',
+          method: 'action_apply_inventory',
+          args: [[quantId]],
           kwargs: { context: ctx },
         }, cookieStr);
-
-        if (!wizard?.result) {
-          throw new Error('无法创建库存调整向导');
-        }
-
-        console.log('向导ID:', wizard.result);
-
-        // 执行库存调整
-        const result = await rpc(base, '/web/dataset/call_kw', {
-          model: 'stock.change.product.qty',
-          method: 'change_product_qty',
-          args: [[wizard.result]],
-          kwargs: { context: ctx },
-        }, cookieStr);
-
-        console.log('库存调整结果:', result);
 
         return NextResponse.json({ 
           ok: true, 
-          method: 'stock.change.product.qty', 
-          location_id: locId,
-          wizard_id: wizard.result
+          method: 'quant.apply', 
+          location_id: locId 
         });
-
-      } catch (wizardError) {
-        console.log('方法1失败，尝试方法2:', wizardError);
-        
-        // 方法2: 使用库存量化直接更新
-        try {
-          console.log('尝试方法2: 直接更新库存量化');
-          
-          // 获取量化记录ID
-          const quantIds = await rpc(base, '/web/dataset/call_kw', {
-            model: 'stock.quant',
-            method: 'search',
-            args: [[['product_id', '=', product_id], ['location_id', '=', locId]]],
-            kwargs: { limit: 1, context: ctx },
-          }, cookieStr);
-
-          if (!Array.isArray(quantIds?.result) || quantIds.result.length === 0) {
-            throw new Error('找不到库存量化记录');
-          }
-
-          const quantId = quantIds.result[0];
-          
-          // 更新库存数量
-          const updateResult = await rpc(base, '/web/dataset/call_kw', {
-            model: 'stock.quant',
-            method: 'write',
-            args: [[quantId], { quantity: new_qty }],
-            kwargs: { context: ctx },
-          }, cookieStr);
-
-          console.log('直接更新结果:', updateResult);
-
-          return NextResponse.json({ 
-            ok: true, 
-            method: 'direct.quant.update', 
-            location_id: locId,
-            quant_id: quantId
-          });
-
-        } catch (quantError) {
-          console.log('方法2失败，尝试方法3:', quantError);
-          
-          // 方法3: 使用库存移动
-          try {
-            console.log('尝试方法3: 创建库存移动');
-            
-            // 获取虚拟库位（用于库存调整）
-            const virtualLocation = await rpc(base, '/web/dataset/call_kw', {
-              model: 'stock.location',
-              method: 'search',
-              args: [[['usage', '=', 'inventory']]],
-              kwargs: { limit: 1, context: ctx },
-            }, cookieStr);
-
-            if (!Array.isArray(virtualLocation?.result) || virtualLocation.result.length === 0) {
-              throw new Error('找不到虚拟库位');
-            }
-
-            const virtualLocId = virtualLocation.result[0];
-            
-            // 创建库存移动
-            const move = await rpc(base, '/web/dataset/call_kw', {
-              model: 'stock.move',
-              method: 'create',
-              args: [[{
-                name: `库存调整 - 产品 ${product_id}`,
-                product_id: product_id,
-                product_uom_qty: Math.abs(new_qty),
-                location_id: new_qty > 0 ? virtualLocId : locId,
-                location_dest_id: new_qty > 0 ? locId : virtualLocId,
-                state: 'done'
-              }]],
-              kwargs: { context: ctx },
-            }, cookieStr);
-
-            console.log('库存移动创建结果:', move);
-
-            return NextResponse.json({ 
-              ok: true, 
-              method: 'stock.move', 
-              location_id: locId,
-              move_id: move?.result
-            });
-
-          } catch (moveError) {
-            console.log('所有方法都失败:', moveError);
-            return NextResponse.json({ 
-              error: '无法调整库存，请检查权限和模块配置',
-              details: String(moveError)
-            }, { status: 500 });
-          }
-        }
       }
-
-    } catch (e: any) {
-      console.log('POST 请求整体错误:', e);
+      
+      throw new Error('Quant记录创建失败');
+    } catch (quantError) {
+      console.error('Quant方法失败:', quantError);
       return NextResponse.json({ 
-        error: e?.message || '库存更新失败',
-        stack: process.env.NODE_ENV === 'development' ? e.stack : undefined
+        error: '库存更新失败，两种方法都不可用: ' + (quantError instanceof Error ? quantError.message : String(quantError))
       }, { status: 500 });
     }
+  } catch (e: any) {
+    return NextResponse.json({ 
+      error: e?.message || '库存更新失败' 
+    }, { status: 500 });
   }
 }
