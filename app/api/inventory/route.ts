@@ -134,6 +134,8 @@ export async function GET(req: NextRequest) {
   }
 }
 
+// —— POST: 盘点（调整到 new_qty），自动选库位 ——
+// 会优先尝试 stock.quant.apply（新版本），失败则回退到旧版向导 stock.change.product.qty
 export async function POST(req: NextRequest) {
   try {
     const { product_id, new_qty, location_id } = await req.json();
@@ -155,85 +157,22 @@ export async function POST(req: NextRequest) {
     const ctx: any = {};
     if (companyId) { ctx.company_id = companyId; ctx.allowed_company_ids = [companyId]; }
 
-    // ① 确定要用的库位
+    // ① 确定要用的库位：优先 body.location_id；否则 cookie；否则根据“当前公司”自动找 WH/Stock
     let locId: number | undefined = Number(location_id || 0) || Number(ck.get('od_location')?.value || 0) || undefined;
     if (!locId) {
       locId = await getDefaultLocationForCompany(base, cookieStr, companyId);
     }
     if (!locId) return NextResponse.json({ error: '缺少 location_id（已尝试自动匹配但未找到，请选择具体库位）' }, { status: 400 });
 
-    // view 库位保护
+    // view 库位保护：必要时下钻到 internal
     locId = await resolveEffectiveLocation(base, cookieStr, locId);
 
-    // ② 保存本次库位（短期 cookie）
+    // ② 保存本次自动判定的库位，便于下次无需再传
     const resp = NextResponse.json({ ok: true, location_id: locId, method: 'pending' });
     resp.cookies.set('od_location', String(locId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
 
-    // helpers
-    const sumQuantAtLocation = async (): Promise<number> => {
-      const qsr = await rpc(base, '/web/dataset/call_kw', {
-        model: 'stock.quant',
-        method: 'search_read',
-        args: [[['product_id', '=', product_id], ['location_id', '=', locId]], ['quantity']],
-        kwargs: { context: ctx },
-      }, cookieStr);
-      if (!Array.isArray(qsr?.result)) return 0;
-      return qsr.result.reduce((s: number, q: any) => s + (q.quantity || 0), 0);
-    };
-
-    const applyQuantDiff = async (quantIdParam: number | null): Promise<{ ok: boolean, err?: any }> => {
-      if (!quantIdParam) return { ok: false, err: 'no quant id' };
-      // read current
-      const qread = await rpc(base, '/web/dataset/call_kw', {
-        model: 'stock.quant',
-        method: 'read',
-        args: [[quantIdParam], ['quantity']],
-        kwargs: { context: ctx },
-      }, cookieStr);
-      const current = qread?.result?.[0]?.quantity || 0;
-      const diff = new_qty - current;
-      // write diff
-      await rpc(base, '/web/dataset/call_kw', {
-        model: 'stock.quant',
-        method: 'write',
-        args: [[quantIdParam], { inventory_diff_quantity: diff }],
-        kwargs: { context: ctx },
-      }, cookieStr);
-      // apply
-      try {
-        await rpc(base, '/web/dataset/call_kw', {
-          model: 'stock.quant',
-          method: 'action_apply_inventory',
-          args: [[quantIdParam]],
-          kwargs: { context: ctx },
-        }, cookieStr);
-        return { ok: true };
-      } catch (e) {
-        return { ok: false, err: e };
-      }
-    };
-
-    const legacyWizard = async (): Promise<{ ok: boolean, err?: any }> => {
-      try {
-        const wiz = await rpc(base, '/web/dataset/call_kw', {
-          model: 'stock.change.product.qty',
-          method: 'create',
-          args: [[{ product_id, new_quantity: new_qty, location_id: locId }]],
-          kwargs: { context: ctx },
-        }, cookieStr);
-        await rpc(base, '/web/dataset/call_kw', {
-          model: 'stock.change.product.qty',
-          method: 'change_product_qty',
-          args: [[wiz?.result]],
-          kwargs: { context: ctx },
-        }, cookieStr);
-        return { ok: true };
-      } catch (e) {
-        return { ok: false, err: e };
-      }
-    };
-
-    // ③ 查/建 quant
+    // ③ 查/建 quant 并应用盘点
+    // search quant
     const found = await rpc(base, '/web/dataset/call_kw', {
       model: 'stock.quant',
       method: 'search',
@@ -247,215 +186,51 @@ export async function POST(req: NextRequest) {
       const created = await rpc(base, '/web/dataset/call_kw', {
         model: 'stock.quant',
         method: 'create',
-        args: [[{ product_id, location_id: locId }]],
+        args: [[{ product_id, location_id: locId, inventory_quantity: new_qty }]],
         kwargs: { context: ctx },
       }, cookieStr);
       quantId = created?.result ?? null;
-    }
-
-    // ④ 读取当前库存（quant.quantity sum）
-    const currentQty = await sumQuantAtLocation();
-
-    const attempts: string[] = [];
-
-    // If starting from zero, first try standard picking flow (create incoming/internal picking)
-    if (currentQty === 0) {
-      attempts.push('start_with_picking_attempt');
-      // --- reading uom ---
-      const pread = await rpc(base, '/web/dataset/call_kw', {
-        model: 'product.product',
-        method: 'read',
-        args: [[product_id], ['uom_id']],
+    } else {
+      await rpc(base, '/web/dataset/call_kw', {
+        model: 'stock.quant',
+        method: 'write',
+        args: [[quantId], { inventory_quantity: new_qty }],
         kwargs: { context: ctx },
       }, cookieStr);
-      const uomId = pread?.result?.[0]?.uom_id?.[0] || 1;
+    }
 
-      // find picking type
-      const ptypeSearch = await rpc(base, '/web/dataset/call_kw', {
-        model: 'stock.picking.type',
-        method: 'search',
-        args: [[['code', '=', 'incoming'], companyId ? ['company_id', '=', companyId] : []].filter(Boolean)],
-        kwargs: { limit: 1, context: ctx },
+    // 尝试新方法：应用盘点 -> 生成可追踪的库存调整
+    try {
+      await rpc(base, '/web/dataset/call_kw', {
+        model: 'stock.quant',
+        method: 'action_apply_inventory',
+        args: [[quantId]],
+        kwargs: { context: ctx },
       }, cookieStr);
-      let pickingTypeId = Array.isArray(ptypeSearch?.result) && ptypeSearch.result.length ? ptypeSearch.result[0] : null;
-      if (!pickingTypeId) {
-        const ptypeInternal = await rpc(base, '/web/dataset/call_kw', {
-          model: 'stock.picking.type',
-          method: 'search',
-          args: [[['code', '=', 'internal'], companyId ? ['company_id', '=', companyId] : []].filter(Boolean)],
-          kwargs: { limit: 1, context: ctx },
-        }, cookieStr);
-        pickingTypeId = Array.isArray(ptypeInternal?.result) && ptypeInternal.result.length ? ptypeInternal.result[0] : null;
-      }
 
-      // source location
-      const srcLocSearch = await rpc(base, '/web/dataset/call_kw', {
-        model: 'stock.location',
-        method: 'search',
-        args: [[['usage', '=', 'supplier'], companyId ? ['company_id', '=', companyId] : []].filter(Boolean)],
-        kwargs: { limit: 1, context: ctx },
-      }, cookieStr);
-      const srcLocId = Array.isArray(srcLocSearch?.result) && srcLocSearch.result.length ? srcLocSearch.result[0] : locId;
-
-      let pickingId: number | null = null;
-      if (pickingTypeId) {
-        // create picking
-        const pickingCreate = await rpc(base, '/web/dataset/call_kw', {
-          model: 'stock.picking',
+      return NextResponse.json({ ok: true, method: 'quant.apply', location_id: locId });
+    } catch {
+      // 旧版向导兜底
+      try {
+        const wiz = await rpc(base, '/web/dataset/call_kw', {
+          model: 'stock.change.product.qty',
           method: 'create',
-          args: [[{
-            picking_type_id: pickingTypeId,
-            location_id: srcLocId,
-            location_dest_id: locId,
-          }]],
+          args: [[{ product_id, new_quantity: new_qty, location_id: locId }]],
           kwargs: { context: ctx },
         }, cookieStr);
-        pickingId = pickingCreate?.result ?? null;
-      }
 
-      if (pickingId) {
-        attempts.push('picking.created');
-        // create move
-        const moveCreate = await rpc(base, '/web/dataset/call_kw', {
-          model: 'stock.move',
-          method: 'create',
-          args: [[{
-            picking_id: pickingId,
-            name: 'Initial stock via API',
-            product_id,
-            product_uom_qty: new_qty,
-            product_uom: uomId,
-            location_id: srcLocId,
-            location_dest_id: locId,
-          }]],
+        await rpc(base, '/web/dataset/call_kw', {
+          model: 'stock.change.product.qty',
+          method: 'change_product_qty',
+          args: [[wiz?.result]],
           kwargs: { context: ctx },
         }, cookieStr);
-        const moveId = moveCreate?.result ?? null;
-        if (moveId) {
-          attempts.push('picking.move.created');
-          // try confirm/assign/validate (best-effort)
-          try {
-            await rpc(base, '/web/dataset/call_kw', {
-              model: 'stock.picking',
-              method: 'action_confirm',
-              args: [[pickingId]],
-              kwargs: { context: ctx },
-            }, cookieStr);
-          } catch (_) { /* ignore */ }
 
-          try {
-            await rpc(base, '/web/dataset/call_kw', {
-              model: 'stock.picking',
-              method: 'action_assign',
-              args: [[pickingId]],
-              kwargs: { context: ctx },
-            }, cookieStr);
-          } catch (_) {
-            try {
-              await rpc(base, '/web/dataset/call_kw', {
-                model: 'stock.picking',
-                method: '_action_assign',
-                args: [[pickingId]],
-                kwargs: { context: ctx },
-              }, cookieStr);
-            } catch (_) { /* ignore */ }
-          }
-
-          // create/update move_lines with qty_done
-          const mlinesSearch = await rpc(base, '/web/dataset/call_kw', {
-            model: 'stock.move.line',
-            method: 'search',
-            args: [[['move_id', '=', moveId]]],
-            kwargs: { context: ctx },
-          }, cookieStr);
-          const moveLineIds = Array.isArray(mlinesSearch?.result) ? mlinesSearch.result : [];
-
-          if (moveLineIds.length === 0) {
-            await rpc(base, '/web/dataset/call_kw', {
-              model: 'stock.move.line',
-              method: 'create',
-              args: [[{
-                move_id: moveId,
-                picking_id: pickingId,
-                product_id,
-                product_uom_id: uomId,
-                qty_done: new_qty,
-                location_id: srcLocId,
-                location_dest_id: locId,
-              }]],
-              kwargs: { context: ctx },
-            }, cookieStr);
-          } else {
-            try {
-              await rpc(base, '/web/dataset/call_kw', {
-                model: 'stock.move.line',
-                method: 'write',
-                args: [moveLineIds, { qty_done: new_qty }],
-                kwargs: { context: ctx },
-              }, cookieStr);
-            } catch (_) { /* ignore */ }
-          }
-
-          // validate
-          try {
-            await rpc(base, '/web/dataset/call_kw', {
-              model: 'stock.picking',
-              method: 'button_validate',
-              args: [[pickingId]],
-              kwargs: { context: ctx },
-            }, cookieStr);
-            attempts.push('picking.validated');
-          } catch (validateErr) {
-            attempts.push('picking.validate_failed');
-          }
-        }
+        return NextResponse.json({ ok: true, method: 'legacy.wizard', location_id: locId });
+      } catch {
+        return NextResponse.json({ error: '库存更新失败：quant 和向导都不可用' }, { status: 500 });
       }
-    } // end if currentQty === 0
-
-    // After initial attempt(s), check real qty
-    let finalQty = await sumQuantAtLocation();
-    if (finalQty >= new_qty) {
-      return NextResponse.json({ ok: true, final_qty: finalQty, attempts, note: 'first attempt succeeded' });
     }
-
-    // Try quant diff + action_apply_inventory
-    attempts.push('quant.apply_first_try');
-    const ap1 = await applyQuantDiff(quantId);
-    if (!ap1.ok) attempts.push('quant.apply_first_fail');
-
-    finalQty = await sumQuantAtLocation();
-    if (finalQty >= new_qty) {
-      return NextResponse.json({ ok: true, final_qty: finalQty, attempts, note: 'quant.apply worked' });
-    }
-
-    // Try legacy wizard as another fallback
-    attempts.push('legacy.wizard_try');
-    const lw = await legacyWizard();
-    if (!lw.ok) attempts.push(`legacy.wizard_fail:${String(lw.err?.message || lw.err)}`);
-
-    finalQty = await sumQuantAtLocation();
-    if (finalQty >= new_qty) {
-      return NextResponse.json({ ok: true, final_qty: finalQty, attempts, note: 'legacy wizard worked' });
-    }
-
-    // Last resort: retry quant.apply once more
-    attempts.push('quant.apply_retry');
-    const ap2 = await applyQuantDiff(quantId);
-    if (!ap2.ok) attempts.push('quant.apply_retry_fail');
-
-    finalQty = await sumQuantAtLocation();
-    if (finalQty >= new_qty) {
-      return NextResponse.json({ ok: true, final_qty: finalQty, attempts, note: 'retry succeeded' });
-    }
-
-    // 如果还是不行，返回失败并附上尝试历史与最终实际数量，便于定位
-    return NextResponse.json({
-      ok: false,
-      error: '多次尝试后数量仍未更新到目标值',
-      final_qty: finalQty,
-      attempts,
-    }, { status: 500 });
-
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || '库存更新失败' }, { status: 500 });
   }
