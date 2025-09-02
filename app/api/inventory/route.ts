@@ -134,7 +134,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// —— POST: 盘点（调整到 new_qty），自动选库位 ——
+// —— POST: 通过创建库存移动来调整库存 ——
 export async function POST(req: NextRequest) {
   try {
     const { product_id, new_qty, location_id } = await req.json();
@@ -156,118 +156,139 @@ export async function POST(req: NextRequest) {
     const ctx: any = {};
     if (companyId) { ctx.company_id = companyId; ctx.allowed_company_ids = [companyId]; }
 
-    // ① 确定要用的库位
+    // 1. 确定要调整的库位
     let locId: number | undefined = Number(location_id || 0) || Number(ck.get('od_location')?.value || 0) || undefined;
     if (!locId) {
       locId = await getDefaultLocationForCompany(base, cookieStr, companyId);
     }
     if (!locId) return NextResponse.json({ error: '缺少 location_id' }, { status: 400 });
 
-    // view 库位保护：必要时下钻到 internal
+    // 确保不是view类型库位
     locId = await resolveEffectiveLocation(base, cookieStr, locId);
 
-    // ② 保存本次自动判定的库位
-    const resp = NextResponse.json({ ok: true, location_id: locId, method: 'pending' });
-    resp.cookies.set('od_location', String(locId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
+    // 2. 获取产品当前的库存数量（在手数量）
+    const productRead = await rpc(base, '/web/dataset/call_kw', {
+      model: 'product.product',
+      method: 'read',
+      args: [[product_id], ['qty_available']],
+      kwargs: { context: ctx },
+    }, cookieStr);
 
-    // ③ 先尝试使用库存调整向导（适用于新旧版本Odoo）
-    try {
-      // 使用库存调整向导
-      const wiz = await rpc(base, '/web/dataset/call_kw', {
-        model: 'stock.change.product.qty',
-        method: 'create',
-        args: [[{ 
-          product_id, 
-          new_quantity: new_qty, 
-          location_id: locId 
-        }]],
-        kwargs: { context: ctx },
-      }, cookieStr);
+    const currentQty = productRead?.result?.[0]?.qty_available || 0;
+    const quantityToAdjust = new_qty - currentQty;
 
-      if (wiz?.result) {
-        await rpc(base, '/web/dataset/call_kw', {
-          model: 'stock.change.product.qty',
-          method: 'change_product_qty',
-          args: [[wiz.result]],
-          kwargs: { context: ctx },
-        }, cookieStr);
-        
-        return NextResponse.json({ 
-          ok: true, 
-          method: 'legacy.wizard', 
-          location_id: locId 
-        });
-      }
-    } catch (wizardError) {
-      console.log('向导方法失败，尝试quant方法:', wizardError);
-      // 向导失败，继续尝试quant方法
+    // 如果数量没有变化，直接返回成功
+    if (quantityToAdjust === 0) {
+      return NextResponse.json({ ok: true, method: 'no.change', location_id: locId, note: '库存数量无变化' });
     }
 
-    // ④ 如果向导方法失败，尝试quant方法
-    try {
-      // 搜索quant记录
-      const found = await rpc(base, '/web/dataset/call_kw', {
-        model: 'stock.quant',
+    // 3. 确定源位置和目标位置
+    // 库存调整的本质是：从一个虚拟库存调整位置 移动到你指定的库位（如果增加库存）
+    //                 或：从你指定的库位 移动到另一个虚拟库存调整位置（如果减少库存）
+    // 首先需要找到这个虚拟的库存调整位置
+    const inventoryAdjustLocationSearch = await rpc(base, '/web/dataset/call_kw', {
+      model: 'stock.location',
+      method: 'search',
+      args: [[['usage', '=', 'inventory'], ['scrap_location', '=', false]]],
+      kwargs: { limit: 1, context: ctx },
+    }, cookieStr);
+
+    let inventoryAdjustLocationId = inventoryAdjustLocationSearch?.result?.[0];
+    // 如果找不到标准的库存调整位置，可以尝试查找其他类型的调整位置，或者使用一个已知的虚拟位置
+    // 这里需要根据你的Odoo实际配置进行调整，以下是一个备选方案
+    if (!inventoryAdjustLocationId) {
+      // 尝试查找名为 'Inventory Adjustment' 或类似名称的位置
+      const inventoryLocationSearch = await rpc(base, '/web/dataset/call_kw', {
+        model: 'stock.location',
         method: 'search',
-        args: [[['product_id', '=', product_id], ['location_id', '=', locId]]],
+        args: [[['name', 'ilike', 'inventory'], ['usage', '=', 'inventory']]],
         kwargs: { limit: 1, context: ctx },
       }, cookieStr);
-
-      let quantId: number | null = Array.isArray(found?.result) && found.result.length ? found.result[0] : null;
-
-      // 如果quant不存在，创建它
-      if (!quantId) {
-        const created = await rpc(base, '/web/dataset/call_kw', {
-          model: 'stock.quant',
-          method: 'create',
-          args: [[{ 
-            product_id, 
-            location_id: locId, 
-            inventory_quantity: new_qty,
-            inventory_date: new Date().toISOString().split('T')[0] // 添加库存日期
-          }]],
-          kwargs: { context: ctx },
-        }, cookieStr);
-        quantId = created?.result ?? null;
-      } else {
-        // 更新现有quant
-        await rpc(base, '/web/dataset/call_kw', {
-          model: 'stock.quant',
-          method: 'write',
-          args: [[quantId], { 
-            inventory_quantity: new_qty,
-            inventory_date: new Date().toISOString().split('T')[0] // 添加库存日期
-          }],
-          kwargs: { context: ctx },
-        }, cookieStr);
-      }
-
-      // 应用库存调整
-      if (quantId) {
-        await rpc(base, '/web/dataset/call_kw', {
-          model: 'stock.quant',
-          method: 'action_apply_inventory',
-          args: [[quantId]],
-          kwargs: { context: ctx },
-        }, cookieStr);
-
-        return NextResponse.json({ 
-          ok: true, 
-          method: 'quant.apply', 
-          location_id: locId 
-        });
-      }
-      
-      throw new Error('Quant记录创建失败');
-    } catch (quantError) {
-      console.error('Quant方法失败:', quantError);
-      return NextResponse.json({ 
-        error: '库存更新失败，两种方法都不可用: ' + (quantError instanceof Error ? quantError.message : String(quantError))
-      }, { status: 500 });
+      inventoryAdjustLocationId = inventoryLocationSearch?.result?.[0];
     }
+
+    if (!inventoryAdjustLocationId) {
+      return NextResponse.json({ error: '未找到库存调整位置，请检查Odoo配置' }, { status: 500 });
+    }
+
+    let sourceLocationId, destLocationId;
+
+    if (quantityToAdjust > 0) {
+      // 增加库存：从库存调整位置移动到目标库位
+      sourceLocationId = inventoryAdjustLocationId;
+      destLocationId = locId;
+    } else {
+      // 减少库存：从目标库位移动到库存调整位置
+      sourceLocationId = locId;
+      destLocationId = inventoryAdjustLocationId;
+    }
+
+    // 4. 创建库存移动
+    const moveCreate = await rpc(base, '/web/dataset/call_kw', {
+      model: 'stock.move',
+      method: 'create',
+      args: [{
+        name: `库存调整: ${quantityToAdjust > 0 ? '增加' : '减少'} ${Math.abs(quantityToAdjust)}`,
+        product_id: product_id,
+        product_uom_qty: Math.abs(quantityToAdjust),
+        location_id: sourceLocationId,
+        location_dest_id: destLocationId,
+        state: 'draft', // 先创建为草稿
+      }],
+      kwargs: { context: ctx },
+    }, cookieStr);
+
+    const moveId = moveCreate?.result;
+
+    if (!moveId) {
+      return NextResponse.json({ error: '创建库存移动失败' }, { status: 500 });
+    }
+
+    // 5. 确认并验证移动
+    const moveConfirm = await rpc(base, '/web/dataset/call_kw', {
+      model: 'stock.move',
+      method: 'action_confirm',
+      args: [[moveId]],
+      kwargs: { context: ctx },
+    }, cookieStr);
+
+    // 6. 强制分配库存（即使库存不足也允许移动）
+    const moveForceAssign = await rpc(base, '/web/dataset/call_kw', {
+      model: 'stock.move',
+      method: 'action_assign',
+      args: [[moveId]],
+      kwargs: { context: ctx },
+    }, cookieStr);
+
+    // 7. 标记移动为完成
+    const moveDone = await rpc(base, '/web/dataset/call_kw', {
+      model: 'stock.move',
+      method: '_action_done',
+      args: [[moveId]],
+      kwargs: { context: ctx },
+    }, cookieStr);
+
+    // 8. 返回成功响应
+    const resp = NextResponse.json({ 
+      ok: true, 
+      method: 'stock.move', 
+      location_id: locId,
+      move_id: moveId,
+      previous_qty: currentQty,
+      new_qty: new_qty,
+      adjusted_by: quantityToAdjust
+    });
+    
+    // 保存本次使用的库位到cookie
+    resp.cookies.set('od_location', String(locId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
+    
+    return resp;
+
   } catch (e: any) {
+    console.error('库存移动创建失败:', e);
     return NextResponse.json({ 
       error: e?.message || '库存更新失败' 
     }, { status: 500 });
   }
+}
 }
