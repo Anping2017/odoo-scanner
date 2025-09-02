@@ -5,289 +5,245 @@ import { resolvePreset } from '@/lib/odooPresets';
 
 // 通用 RPC 封装
 async function rpc(url: string, path: string, body: any, cookie: string) {
-  const res = await fetch(`${url}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', cookie },
-    body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method: 'call', params: body }),
-    cache: 'no-store',
-  });
-  const data = await res.json().catch(() => ({}));
-  return data;
+    const res = await fetch(`${url}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie },
+        body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method: 'call', params: body }),
+        cache: 'no-store',
+    });
+    const data = await res.json().catch(() => ({}));
+    return data;
 }
 
 // 如果传入的是 view 类型库位，向下找一个 internal 子库位
 async function resolveEffectiveLocation(base: string, cookieStr: string, locId: number): Promise<number> {
-  const read = await rpc(base, '/web/dataset/call_kw', {
-    model: 'stock.location',
-    method: 'read',
-    args: [[locId], ['id', 'usage']],
-    kwargs: {},
-  }, cookieStr);
+    const read = await rpc(base, '/web/dataset/call_kw', {
+        model: 'stock.location',
+        method: 'read',
+        args: [[locId], ['id', 'usage']],
+        kwargs: {},
+    }, cookieStr);
 
-  const loc = Array.isArray(read?.result) && read.result[0];
-  if (!loc) throw new Error(`Location ${locId} not found`);
-  if (loc.usage !== 'view') return locId;
+    const loc = Array.isArray(read?.result) && read.result[0];
+    if (!loc) throw new Error(`Location ${locId} not found`);
+    if (loc.usage !== 'view') return locId;
 
-  const child = await rpc(base, '/web/dataset/call_kw', {
-    model: 'stock.location',
-    method: 'search',
-    args: [[['location_id', '=', locId], ['usage', '=', 'internal']]],
-    kwargs: { limit: 1 },
-  }, cookieStr);
+    const child = await rpc(base, '/web/dataset/call_kw', {
+        model: 'stock.location',
+        method: 'search',
+        args: [[['location_id', '=', locId], ['usage', '=', 'internal']]],
+        kwargs: { limit: 1 },
+    }, cookieStr);
 
-  if (Array.isArray(child?.result) && child.result.length) return child.result[0];
-  throw new Error(`Location ${locId} is 'view' and has no internal child. Please choose an Internal location (e.g. WH/Stock).`);
+    if (Array.isArray(child?.result) && child.result.length) return child.result[0];
+    throw new Error(`Location ${locId} is 'view' and has no internal child. Please choose an Internal location (e.g. WH/Stock).`);
 }
 
-// ✅ 依据"当前公司"自动找默认库位（该公司的 WH/Stock）
+// 依据"当前公司"自动找默认库位（该公司的 WH/Stock）
 async function getDefaultLocationForCompany(base: string, cookieStr: string, companyId?: number): Promise<number | undefined> {
-  // 尝试：拿该公司的仓库 -> lot_stock_id
-  if (companyId) {
-    const whIds = await rpc(base, '/web/dataset/call_kw', {
-      model: 'stock.warehouse',
-      method: 'search',
-      args: [[['company_id', '=', companyId]]],
-      kwargs: { limit: 1 },
-    }, cookieStr);
-    const wid = whIds?.result?.[0];
-    if (wid) {
-      const wh = await rpc(base, '/web/dataset/call_kw', {
-        model: 'stock.warehouse',
-        method: 'read',
-        args: [[wid], ['lot_stock_id']],
-        kwargs: {},
-      }, cookieStr);
-      const lot = wh?.result?.[0]?.lot_stock_id?.[0];
-      if (lot) return lot;
+    // 尝试：拿该公司的仓库 -> lot_stock_id
+    if (companyId) {
+        const whIds = await rpc(base, '/web/dataset/call_kw', {
+            model: 'stock.warehouse',
+            method: 'search',
+            args: [[['company_id', '=', companyId]]],
+            kwargs: { limit: 1 },
+        }, cookieStr);
+        const wid = whIds?.result?.[0];
+        if (wid) {
+            const wh = await rpc(base, '/web/dataset/call_kw', {
+                model: 'stock.warehouse',
+                method: 'read',
+                args: [[wid], ['lot_stock_id']],
+                kwargs: {},
+            }, cookieStr);
+            const lot = wh?.result?.[0]?.lot_stock_id?.[0];
+            if (lot) return lot;
+        }
     }
-  }
 
-  // 兜底：随公司范围找任意一个 internal 库位
-  const domain: any[] = [['usage', '=', 'internal']];
-  if (companyId) domain.push(['company_id', '=', companyId]);
-  const locIds = await rpc(base, '/web/dataset/call_kw', {
-    model: 'stock.location',
-    method: 'search',
-    args: [domain],
-    kwargs: { limit: 1 },
-  }, cookieStr);
-  return locIds?.result?.[0];
+    // 兜底：随公司范围找任意一个 internal 库位
+    const domain: any[] = [['usage', '=', 'internal']];
+    if (companyId) domain.push(['company_id', '=', companyId]);
+    const locIds = await rpc(base, '/web/dataset/call_kw', {
+        model: 'stock.location',
+        method: 'search',
+        args: [domain],
+        kwargs: { limit: 1 },
+    }, cookieStr);
+    return locIds?.result?.[0];
 }
 
 // —— GET: 最近库存变动（简版历史）——
 export async function GET(req: NextRequest) {
-  try {
-    const pid = Number(req.nextUrl.searchParams.get('product_id') || 0);
-    const limit = Number(req.nextUrl.searchParams.get('limit') || 10);
+    try {
+        const pid = Number(req.nextUrl.searchParams.get('product_id') || 0);
+        const limit = Number(req.nextUrl.searchParams.get('limit') || 10);
 
-    const ck = cookies();
-    const host = headers().get('host') || undefined;
-    const preset = resolvePreset(host);
+        const ck = cookies();
+        const host = headers().get('host') || undefined;
+        const preset = resolvePreset(host);
 
-    const base = ck.get('od_base')?.value || preset?.url;
-    const session = ck.get('od_session')?.value;
-    const companyId = Number(ck.get('od_company')?.value || 0) || undefined;
-    if (!base || !session) return NextResponse.json({ error: '未登录' }, { status: 401 });
-    if (!pid) return NextResponse.json({ error: 'product_id required' }, { status: 400 });
+        const base = ck.get('od_base')?.value || preset?.url;
+        const session = ck.get('od_session')?.value;
+        const companyId = Number(ck.get('od_company')?.value || 0) || undefined;
+        if (!base || !session) return NextResponse.json({ error: '未登录' }, { status: 401 });
+        if (!pid) return NextResponse.json({ error: 'product_id required' }, { status: 400 });
 
-    const cookieStr = `session_id=${session}`;
-    const context: any = {};
-    if (companyId) { context.company_id = companyId; context.allowed_company_ids = [companyId]; }
+        const cookieStr = `session_id=${session}`;
+        const context: any = {};
+        if (companyId) { context.company_id = companyId; context.allowed_company_ids = [companyId]; }
 
-    // 用 stock.move 读近几条完成的移动作为历史
-    const moveIds = await rpc(base, '/web/dataset/call_kw', {
-      model: 'stock.move',
-      method: 'search',
-      args: [[
-        ['product_id', '=', pid],
-        ['state', '=', 'done'],
-      ]],
-      kwargs: { limit, order: 'date desc', context },
-    }, cookieStr);
+        // 用 stock.move 读近几条完成的移动作为历史
+        const moveIds = await rpc(base, '/web/dataset/call_kw', {
+            model: 'stock.move',
+            method: 'search',
+            args: [[
+                ['product_id', '=', pid],
+                ['state', '=', 'done'],
+            ]],
+            kwargs: { limit, order: 'date desc', context },
+        }, cookieStr);
 
-    if (!Array.isArray(moveIds?.result) || !moveIds.result.length) {
-      return NextResponse.json({ history: [] });
+        if (!Array.isArray(moveIds?.result) || !moveIds.result.length) {
+            return NextResponse.json({ history: [] });
+        }
+
+        const moves = await rpc(base, '/web/dataset/call_kw', {
+            model: 'stock.move',
+            method: 'read',
+            args: [moveIds.result, ['id', 'date', 'product_uom_qty', 'product_uom', 'location_id', 'location_dest_id', 'reference', 'create_uid', 'write_uid']],
+            kwargs: { context },
+        }, cookieStr);
+
+        const out = (moves?.result || []).map((m: any) => ({
+            id: m.id,
+            date: m.date,
+            qty_done: m.product_uom_qty,
+            uom: m.product_uom?.[1],
+            from: m.location_id?.[1],
+            to: m.location_dest_id?.[1],
+            ref: m.reference,
+            created_by: m.create_uid?.[1],
+            updated_by: m.write_uid?.[1],
+        }));
+
+        return NextResponse.json({ history: out });
+    } catch (e: any) {
+        return NextResponse.json({ error: e?.message || '查询历史失败' }, { status: 500 });
     }
-
-    const moves = await rpc(base, '/web/dataset/call_kw', {
-      model: 'stock.move',
-      method: 'read',
-      args: [moveIds.result, ['id', 'date', 'product_uom_qty', 'product_uom', 'location_id', 'location_dest_id', 'reference', 'create_uid', 'write_uid']],
-      kwargs: { context },
-    }, cookieStr);
-
-    const out = (moves?.result || []).map((m: any) => ({
-      id: m.id,
-      date: m.date,
-      qty_done: m.product_uom_qty,
-      uom: m.product_uom?.[1],
-      from: m.location_id?.[1],
-      to: m.location_dest_id?.[1],
-      ref: m.reference,
-      created_by: m.create_uid?.[1],
-      updated_by: m.write_uid?.[1],
-    }));
-
-    return NextResponse.json({ history: out });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || '查询历史失败' }, { status: 500 });
-  }
 }
 
-// —— POST: 通过创建库存移动来调整库存 ——
+// —— POST: 盘点（调整到 new_qty），自动选库位 ——
 export async function POST(req: NextRequest) {
-  try {
-    const { product_id, new_qty, location_id } = await req.json();
+    try {
+        const { product_id, new_qty, location_id } = await req.json();
 
-    const ck = cookies();
-    const host = headers().get('host') || undefined;
-    const preset = resolvePreset(host);
+        const ck = cookies();
+        const host = headers().get('host') || undefined;
+        const preset = resolvePreset(host);
 
-    const base = ck.get('od_base')?.value || preset?.url;
-    const session = ck.get('od_session')?.value;
-    const companyId = Number(ck.get('od_company')?.value || 0) || undefined;
+        const base = ck.get('od_base')?.value || preset?.url;
+        const session = ck.get('od_session')?.value;
+        const companyId = Number(ck.get('od_company')?.value || 0) || undefined;
 
-    if (!base || !session) return NextResponse.json({ error: '未登录' }, { status: 401 });
-    if (!product_id || typeof new_qty !== 'number' || Number.isNaN(new_qty)) {
-      return NextResponse.json({ error: '缺少 product_id 或 new_qty' }, { status: 400 });
+        if (!base || !session) return NextResponse.json({ error: '未登录' }, { status: 401 });
+        if (!product_id || typeof new_qty !== 'number' || Number.isNaN(new_qty)) {
+            return NextResponse.json({ error: '缺少 product_id 或 new_qty' }, { status: 400 });
+        }
+
+        const cookieStr = `session_id=${session}`;
+        const ctx: any = {};
+        if (companyId) { ctx.company_id = companyId; ctx.allowed_company_ids = [companyId]; }
+
+        // ① 确定要用的库位：优先 body.location_id；否则 cookie；否则根据"当前公司"自动找 WH/Stock
+        let locId: number | undefined = Number(location_id || 0) || Number(ck.get('od_location')?.value || 0) || undefined;
+        if (!locId) {
+            locId = await getDefaultLocationForCompany(base, cookieStr, companyId);
+        }
+        if (!locId) return NextResponse.json({ error: '缺少 location_id（已尝试自动匹配但未找到，请选择具体库位）' }, { status: 400 });
+
+        // view 库位保护：必要时下钻到 internal
+        locId = await resolveEffectiveLocation(base, cookieStr, locId);
+
+        // ② 保存本次自动判定的库位，便于下次无需再传
+        const resp = NextResponse.json({ ok: true, location_id: locId, method: 'pending' });
+        resp.cookies.set('od_location', String(locId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
+
+        // ③ 查/建 quant 并应用盘点
+        // Odoo 的库存数量（on-hand）保存在 stock.quant 模型中。
+        // 第一次创建 quant 时，Odoo 并不会立即更新实际库存，需要调用 action_apply_inventory 方法来"应用"盘点。
+        // 这也是为什么第一次更新后可能没有立即看到效果的原因。
+        
+        // search quant
+        const found = await rpc(base, '/web/dataset/call_kw', {
+            model: 'stock.quant',
+            method: 'search',
+            args: [[['product_id', '=', product_id], ['location_id', '=', locId]]],
+            kwargs: { limit: 1, context: ctx },
+        }, cookieStr);
+
+        let quantId: number | null = Array.isArray(found?.result) && found.result.length ? found.result[0] : null;
+
+        if (!quantId) {
+            // 如果不存在 quant，则创建一条新的记录
+            const created = await rpc(base, '/web/dataset/call_kw', {
+                model: 'stock.quant',
+                method: 'create',
+                args: [[{ product_id, location_id: locId, inventory_quantity: new_qty }]],
+                kwargs: { context: ctx },
+            }, cookieStr);
+            quantId = created?.result ?? null;
+        } else {
+            // 如果 quant 存在，则更新其盘点数量
+            await rpc(base, '/web/dataset/call_kw', {
+                model: 'stock.quant',
+                method: 'write',
+                args: [[quantId], { inventory_quantity: new_qty }],
+                kwargs: { context: ctx },
+            }, cookieStr);
+        }
+        
+        if (!quantId) {
+            return NextResponse.json({ error: '创建或查找 stock.quant 失败' }, { status: 500 });
+        }
+
+        // 尝试新方法：应用盘点 -> 生成可追踪的库存调整
+        try {
+            // Odoo 会根据 inventory_quantity 和当前实际数量的差值自动创建 stock.move
+            await rpc(base, '/web/dataset/call_kw', {
+                model: 'stock.quant',
+                method: 'action_apply_inventory',
+                args: [[quantId]],
+                kwargs: { context: ctx },
+            }, cookieStr);
+
+            return NextResponse.json({ ok: true, method: 'quant.apply', location_id: locId });
+        } catch (e: any) {
+            // 旧版向导兜底
+            console.error('Failed to use quant.action_apply_inventory, falling back to legacy wizard.', e);
+            try {
+                const wiz = await rpc(base, '/web/dataset/call_kw', {
+                    model: 'stock.change.product.qty',
+                    method: 'create',
+                    args: [[{ product_id, new_quantity: new_qty, location_id: locId }]],
+                    kwargs: { context: ctx },
+                }, cookieStr);
+
+                await rpc(base, '/web/dataset/call_kw', {
+                    model: 'stock.change.product.qty',
+                    method: 'change_product_qty',
+                    args: [[wiz?.result]],
+                    kwargs: { context: ctx },
+                }, cookieStr);
+
+                return NextResponse.json({ ok: true, method: 'legacy.wizard', location_id: locId });
+            } catch (e2: any) {
+                console.error('Failed to use legacy wizard as well.', e2);
+                return NextResponse.json({ error: '库存更新失败：quant 和向导都不可用' }, { status: 500 });
+            }
+        }
+    } catch (e: any) {
+        return NextResponse.json({ error: e?.message || '库存更新失败' }, { status: 500 });
     }
-
-    const cookieStr = `session_id=${session}`;
-    const ctx: any = {};
-    if (companyId) { ctx.company_id = companyId; ctx.allowed_company_ids = [companyId]; }
-
-    // 1. 确定要调整的库位
-    let locId: number | undefined = Number(location_id || 0) || Number(ck.get('od_location')?.value || 0) || undefined;
-    if (!locId) {
-      locId = await getDefaultLocationForCompany(base, cookieStr, companyId);
-    }
-    if (!locId) return NextResponse.json({ error: '缺少 location_id' }, { status: 400 });
-
-    // 确保不是view类型库位
-    locId = await resolveEffectiveLocation(base, cookieStr, locId);
-
-    // 2. 获取产品当前的库存数量（在手数量）
-    const productRead = await rpc(base, '/web/dataset/call_kw', {
-      model: 'product.product',
-      method: 'read',
-      args: [[product_id], ['qty_available']],
-      kwargs: { context: ctx },
-    }, cookieStr);
-
-    const currentQty = productRead?.result?.[0]?.qty_available || 0;
-    const quantityToAdjust = new_qty - currentQty;
-
-    // 如果数量没有变化，直接返回成功
-    if (quantityToAdjust === 0) {
-      return NextResponse.json({ ok: true, method: 'no.change', location_id: locId, note: '库存数量无变化' });
-    }
-
-    // 3. 确定源位置和目标位置
-    // 库存调整的本质是：从一个虚拟库存调整位置 移动到你指定的库位（如果增加库存）
-    //                 或：从你指定的库位 移动到另一个虚拟库存调整位置（如果减少库存）
-    // 首先需要找到这个虚拟的库存调整位置
-    const inventoryAdjustLocationSearch = await rpc(base, '/web/dataset/call_kw', {
-      model: 'stock.location',
-      method: 'search',
-      args: [[['usage', '=', 'inventory'], ['scrap_location', '=', false]]],
-      kwargs: { limit: 1, context: ctx },
-    }, cookieStr);
-
-    let inventoryAdjustLocationId = inventoryAdjustLocationSearch?.result?.[0];
-    // 如果找不到标准的库存调整位置，可以尝试查找其他类型的调整位置，或者使用一个已知的虚拟位置
-    // 这里需要根据你的Odoo实际配置进行调整，以下是一个备选方案
-    if (!inventoryAdjustLocationId) {
-      // 尝试查找名为 'Inventory Adjustment' 或类似名称的位置
-      const inventoryLocationSearch = await rpc(base, '/web/dataset/call_kw', {
-        model: 'stock.location',
-        method: 'search',
-        args: [[['name', 'ilike', 'inventory'], ['usage', '=', 'inventory']]],
-        kwargs: { limit: 1, context: ctx },
-      }, cookieStr);
-      inventoryAdjustLocationId = inventoryLocationSearch?.result?.[0];
-    }
-
-    if (!inventoryAdjustLocationId) {
-      return NextResponse.json({ error: '未找到库存调整位置，请检查Odoo配置' }, { status: 500 });
-    }
-
-    let sourceLocationId, destLocationId;
-
-    if (quantityToAdjust > 0) {
-      // 增加库存：从库存调整位置移动到目标库位
-      sourceLocationId = inventoryAdjustLocationId;
-      destLocationId = locId;
-    } else {
-      // 减少库存：从目标库位移动到库存调整位置
-      sourceLocationId = locId;
-      destLocationId = inventoryAdjustLocationId;
-    }
-
-    // 4. 创建库存移动
-    const moveCreate = await rpc(base, '/web/dataset/call_kw', {
-      model: 'stock.move',
-      method: 'create',
-      args: [{
-        name: `库存调整: ${quantityToAdjust > 0 ? '增加' : '减少'} ${Math.abs(quantityToAdjust)}`,
-        product_id: product_id,
-        product_uom_qty: Math.abs(quantityToAdjust),
-        location_id: sourceLocationId,
-        location_dest_id: destLocationId,
-        state: 'draft', // 先创建为草稿
-      }],
-      kwargs: { context: ctx },
-    }, cookieStr);
-
-    const moveId = moveCreate?.result;
-
-    if (!moveId) {
-      return NextResponse.json({ error: '创建库存移动失败' }, { status: 500 });
-    }
-
-    // 5. 确认并验证移动
-    const moveConfirm = await rpc(base, '/web/dataset/call_kw', {
-      model: 'stock.move',
-      method: 'action_confirm',
-      args: [[moveId]],
-      kwargs: { context: ctx },
-    }, cookieStr);
-
-    // 6. 强制分配库存（即使库存不足也允许移动）
-    const moveForceAssign = await rpc(base, '/web/dataset/call_kw', {
-      model: 'stock.move',
-      method: 'action_assign',
-      args: [[moveId]],
-      kwargs: { context: ctx },
-    }, cookieStr);
-
-    // 7. 标记移动为完成
-    const moveDone = await rpc(base, '/web/dataset/call_kw', {
-      model: 'stock.move',
-      method: '_action_done',
-      args: [[moveId]],
-      kwargs: { context: ctx },
-    }, cookieStr);
-
-    // 8. 返回成功响应
-    const resp = NextResponse.json({ 
-      ok: true, 
-      method: 'stock.move', 
-      location_id: locId,
-      move_id: moveId,
-      previous_qty: currentQty,
-      new_qty: new_qty,
-      adjusted_by: quantityToAdjust
-    });
-    
-    // 保存本次使用的库位到cookie
-    resp.cookies.set('od_location', String(locId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
-    
-    return resp;
-
-  } catch (e: any) {
-    console.error('库存移动创建失败:', e);
-    return NextResponse.json({ 
-      error: e?.message || '库存更新失败' 
-    }, { status: 500 });
-  }
 }
