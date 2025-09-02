@@ -135,6 +135,7 @@ export async function GET(req: NextRequest) {
 }
 
 // —— POST: 盘点（调整到 new_qty），自动选库位 ——
+// 优先用 quant.apply；若当前 quant 数量为 0（首次入库），则直接创建一笔入库/内部移动
 export async function POST(req: NextRequest) {
   try {
     const { product_id, new_qty, location_id } = await req.json();
@@ -166,7 +167,7 @@ export async function POST(req: NextRequest) {
     // view 库位保护
     locId = await resolveEffectiveLocation(base, cookieStr, locId);
 
-    // ② 保存本次库位
+    // ② 保存本次库位（短期 cookie）
     const resp = NextResponse.json({ ok: true, location_id: locId, method: 'pending' });
     resp.cookies.set('od_location', String(locId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
 
@@ -190,7 +191,7 @@ export async function POST(req: NextRequest) {
       quantId = created?.result ?? null;
     }
 
-    // ④ 读取当前库存
+    // ④ 读取当前库存（quant.quantity）
     const qread = await rpc(base, '/web/dataset/call_kw', {
       model: 'stock.quant',
       method: 'read',
@@ -199,8 +200,135 @@ export async function POST(req: NextRequest) {
     }, cookieStr);
     const currentQty = qread?.result?.[0]?.quantity || 0;
 
-    // ⑤ 设置差异并应用盘点
-    const diff = new_qty - currentQty;
+    // 如果当前为 0 —— 使用「标准入库/内部移动」流程来创建真实的库存变动（更可靠）
+    if (currentQty === 0) {
+      // 读取 product 的默认单位（uom_id）
+      const pread = await rpc(base, '/web/dataset/call_kw', {
+        model: 'product.product',
+        method: 'read',
+        args: [[product_id], ['uom_id']],
+        kwargs: { context: ctx },
+      }, cookieStr);
+      const uomId = pread?.result?.[0]?.uom_id?.[0] || 1;
+
+      // 1) 尝试找 incoming picking type，否则找 internal
+      const ptypeSearch = await rpc(base, '/web/dataset/call_kw', {
+        model: 'stock.picking.type',
+        method: 'search',
+        args: [[['code', '=', 'incoming']]], // 优先 incoming
+        kwargs: { limit: 1, context: ctx },
+      }, cookieStr);
+
+      let pickingTypeId = Array.isArray(ptypeSearch?.result) && ptypeSearch.result.length ? ptypeSearch.result[0] : null;
+
+      if (!pickingTypeId) {
+        const ptypeInternal = await rpc(base, '/web/dataset/call_kw', {
+          model: 'stock.picking.type',
+          method: 'search',
+          args: [[['code', '=', 'internal']]],
+          kwargs: { limit: 1, context: ctx },
+        }, cookieStr);
+        pickingTypeId = Array.isArray(ptypeInternal?.result) && ptypeInternal.result.length ? ptypeInternal.result[0] : null;
+      }
+
+      // 2) 找入库来源库位（supplier）作为来源：如果没有 supplier 库位就用 locId 作为来源（兜底）
+      const srcLocSearch = await rpc(base, '/web/dataset/call_kw', {
+        model: 'stock.location',
+        method: 'search',
+        args: [[['usage', '=', 'supplier']]],
+        kwargs: { limit: 1, context: ctx },
+      }, cookieStr);
+      const srcLocId = Array.isArray(srcLocSearch?.result) && srcLocSearch.result.length ? srcLocSearch.result[0] : locId;
+
+      // 3) 创建 picking（入库/内部）
+      if (!pickingTypeId) {
+        // 找不到任何 picking type，则回退到 quant.apply 方案（后面会兜底 legacy）
+        // 继续走 quant.diff + apply below
+      } else {
+        const pickingCreate = await rpc(base, '/web/dataset/call_kw', {
+          model: 'stock.picking',
+          method: 'create',
+          args: [[{
+            picking_type_id: pickingTypeId,
+            location_id: srcLocId,
+            location_dest_id: locId,
+            // optional: add a name/partner if you want
+            // partner_id: false,
+          }]],
+          kwargs: { context: ctx },
+        }, cookieStr);
+        const pickingId = pickingCreate?.result ?? null;
+        if (!pickingId) {
+          // 创建失败，退回到 quant.apply 方案（后面兜底）
+        } else {
+          // 4) 创建 move
+          const moveCreate = await rpc(base, '/web/dataset/call_kw', {
+            model: 'stock.move',
+            method: 'create',
+            args: [[{
+              picking_id: pickingId,
+              name: 'Initial stock via API',
+              product_id,
+              product_uom_qty: new_qty,
+              product_uom: uomId,
+              location_id: srcLocId,
+              location_dest_id: locId,
+            }]],
+            kwargs: { context: ctx },
+          }, cookieStr);
+          const moveId = moveCreate?.result ?? null;
+
+          if (!moveId) {
+            // move 创建失败，尝试删除 picking（不强制），然后回退到 quant.apply 方案
+          } else {
+            // 5) 确认 -> 分配 -> 验证（尽量走标准动作）
+            try {
+              // confirm
+              await rpc(base, '/web/dataset/call_kw', {
+                model: 'stock.picking',
+                method: 'action_confirm',
+                args: [[pickingId]],
+                kwargs: { context: ctx },
+              }, cookieStr);
+
+              // try assign (may be action_assign or _action_assign depending on Odoo)
+              await rpc(base, '/web/dataset/call_kw', {
+                model: 'stock.picking',
+                method: 'action_assign',
+                args: [[pickingId]],
+                kwargs: { context: ctx },
+              }, cookieStr);
+
+              // write done quantities on move.lines if necessary (many DBs will auto-create lines)
+              // Attempt to validate (button_validate)
+              await rpc(base, '/web/dataset/call_kw', {
+                model: 'stock.picking',
+                method: 'button_validate',
+                args: [[pickingId]],
+                kwargs: { context: ctx },
+              }, cookieStr);
+
+              return NextResponse.json({ ok: true, method: 'picking.in', picking_id: pickingId, location_id: locId });
+            } catch (err) {
+              // 入库流程失败 —— 回退到后续 quant.apply 流程（下面）
+            }
+          }
+        }
+      }
+      // 如果上述入库流程任一步失败，则继续走 quant.diff + action_apply_inventory 的兜底流程（下方）
+    }
+
+    // ⑤ 通用：设置差异并尝试 action_apply_inventory（quant 方式的兜底方案）
+    const qread2 = await rpc(base, '/web/dataset/call_kw', {
+      model: 'stock.quant',
+      method: 'read',
+      args: [[quantId], ['quantity']],
+      kwargs: { context: ctx },
+    }, cookieStr);
+    const currentQty2 = qread2?.result?.[0]?.quantity || 0;
+    const diff = new_qty - currentQty2;
+
+    // 写入差异
     await rpc(base, '/web/dataset/call_kw', {
       model: 'stock.quant',
       method: 'write',
@@ -208,6 +336,7 @@ export async function POST(req: NextRequest) {
       kwargs: { context: ctx },
     }, cookieStr);
 
+    // 尝试应用库存调整
     try {
       await rpc(base, '/web/dataset/call_kw', {
         model: 'stock.quant',
@@ -218,7 +347,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({ ok: true, method: 'quant.apply', location_id: locId });
     } catch {
-      // 兜底 legacy
+      // 兜底 legacy：老向导（stock.change.product.qty）
       try {
         const wiz = await rpc(base, '/web/dataset/call_kw', {
           model: 'stock.change.product.qty',
@@ -236,7 +365,7 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({ ok: true, method: 'legacy.wizard', location_id: locId });
       } catch {
-        return NextResponse.json({ error: '库存更新失败：quant 和向导都不可用' }, { status: 500 });
+        return NextResponse.json({ error: '库存更新失败：quant、picking 和向导都不可用' }, { status: 500 });
       }
     }
   } catch (e: any) {
