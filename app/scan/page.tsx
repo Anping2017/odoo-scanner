@@ -10,6 +10,8 @@ type Product = {
   default_code?: string;
   qty_available?: number;
   free_qty?: number;
+  standard_price?: number; // 成本价
+  lst_price?: number;      // 销售价
 };
 
 type HistoryItem = {
@@ -122,6 +124,15 @@ export default function ScanPage() {
     setHistory([]);
     lastFetchedCodeRef.current = '';
   }, []);
+
+  // 格式化价格显示
+  const formatPrice = (price?: number) => {
+    if (price === undefined || price === null) return '-';
+    return new Intl.NumberFormat('zh-CN', {
+      style: 'currency',
+      currency: 'CNY'
+    }).format(price);
+  };
 
   // 提交盘点：把产品在当前库位的数量调整到 counted
   const handleUpdateInventory = useCallback(async () => {
@@ -265,6 +276,18 @@ export default function ScanPage() {
               <div style={{ color: '#6b7280', fontSize: 13 }}>
                 条码：{product.barcode || '-'} | 编码：{product.default_code || '-'}
               </div>
+              
+              {/* 价格信息 */}
+              <div style={{ marginTop: 8, fontSize: 14, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                <div>
+                  成本：<strong style={{ color: '#dc2626' }}>{formatPrice(product.standard_price)}</strong>
+                </div>
+                <div>
+                  售价：<strong style={{ color: '#059669' }}>{formatPrice(product.lst_price)}</strong>
+                </div>
+              </div>
+
+              {/* 库存信息 */}
               <div style={{ marginTop: 8, fontSize: 14 }}>
                 现有库存：<strong>{product.qty_available ?? '-'}</strong>
                 {typeof product.free_qty === 'number' ? (
