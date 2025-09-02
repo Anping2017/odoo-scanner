@@ -208,7 +208,7 @@ export async function POST(req: NextRequest) {
         if (!wiz?.result) {
             return NextResponse.json({ error: '创建库存调整向导失败' }, { status: 500 });
         }
-        
+
         // 调用向导的 change_product_qty 方法来应用盘点
         await rpc(base, '/web/dataset/call_kw', {
             model: 'stock.change.product.qty',
@@ -218,7 +218,7 @@ export async function POST(req: NextRequest) {
         }, cookieStr);
 
         return NextResponse.json({ ok: true, method: 'legacy.wizard', location_id: locId });
-        
+
     } catch (e: any) {
         return NextResponse.json({ error: e?.message |
 
