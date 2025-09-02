@@ -24,9 +24,9 @@ async function resolveEffectiveLocation(base: string, cookieStr: string, locId: 
         kwargs: {},
     }, cookieStr);
 
-    const loc = Array.isArray(read?.result) && read.result;
+    const loc = Array.isArray(read?.result) && read.result[0];
     if (!loc) throw new Error(`Location ${locId} not found`);
-    if (loc.usage!== 'view') return locId;
+    if (loc.usage !== 'view') return locId;
 
     const child = await rpc(base, '/web/dataset/call_kw', {
         model: 'stock.location',
@@ -35,7 +35,7 @@ async function resolveEffectiveLocation(base: string, cookieStr: string, locId: 
         kwargs: { limit: 1 },
     }, cookieStr);
 
-    if (Array.isArray(child?.result) && child.result.length) return child.result;
+    if (Array.isArray(child?.result) && child.result.length) return child.result[0];
     throw new Error(`Location ${locId} is 'view' and has no internal child. Please choose an Internal location (e.g. WH/Stock).`);
 }
 
@@ -49,7 +49,7 @@ async function getDefaultLocationForCompany(base: string, cookieStr: string, com
             args: [[['company_id', '=', companyId]]],
             kwargs: { limit: 1 },
         }, cookieStr);
-        const wid = whIds?.result?.;
+        const wid = whIds?.result?.[0];
         if (wid) {
             const wh = await rpc(base, '/web/dataset/call_kw', {
                 model: 'stock.warehouse',
@@ -57,7 +57,7 @@ async function getDefaultLocationForCompany(base: string, cookieStr: string, com
                 args: [[wid], ['lot_stock_id']],
                 kwargs: {},
             }, cookieStr);
-            const lot = wh?.result?.?.lot_stock_id?.;
+            const lot = wh?.result?.[0]?.lot_stock_id?.[0];
             if (lot) return lot;
         }
     }
@@ -71,34 +71,23 @@ async function getDefaultLocationForCompany(base: string, cookieStr: string, com
         args: [domain],
         kwargs: { limit: 1 },
     }, cookieStr);
-    return locIds?.result?.;
+    return locIds?.result?.[0];
 }
 
 // —— GET: 最近库存变动（简版历史）——
 export async function GET(req: NextRequest) {
     try {
-        const pid = Number(req.nextUrl.searchParams.get('product_id') |
-
-| 0);
-        const limit = Number(req.nextUrl.searchParams.get('limit') |
-
-| 10);
+        const pid = Number(req.nextUrl.searchParams.get('product_id') || 0);
+        const limit = Number(req.nextUrl.searchParams.get('limit') || 10);
 
         const ck = cookies();
-        const host = headers().get('host') |
-
-| undefined;
+        const host = headers().get('host') || undefined;
         const preset = resolvePreset(host);
 
-        const base = ck.get('od_base')?.value |
-
-| preset?.url;
+        const base = ck.get('od_base')?.value || preset?.url;
         const session = ck.get('od_session')?.value;
-        const companyId = Number(ck.get('od_company')?.value |
-
-| 0) |
-| undefined;
-        if (!base ||!session) return NextResponse.json({ error: '未登录' }, { status: 401 });
+        const companyId = Number(ck.get('od_company')?.value || 0) || undefined;
+        if (!base || !session) return NextResponse.json({ error: '未登录' }, { status: 401 });
         if (!pid) return NextResponse.json({ error: 'product_id required' }, { status: 400 });
 
         const cookieStr = `session_id=${session}`;
@@ -109,13 +98,12 @@ export async function GET(req: NextRequest) {
         const moveIds = await rpc(base, '/web/dataset/call_kw', {
             model: 'stock.move',
             method: 'search',
-            args: [['product_id', '=', pid],
-                ['state', '=', 'done']],
+            args: [[['product_id', '=', pid], ['state', '=', 'done']]],
             kwargs: { limit, order: 'date desc', context },
         }, cookieStr);
 
-        if (!Array.isArray(moveIds?.result) ||!moveIds.result.length) {
-            return NextResponse.json({ history: });
+        if (!Array.isArray(moveIds?.result) || !moveIds.result.length) {
+            return NextResponse.json({ history: [] });
         }
 
         const moves = await rpc(base, '/web/dataset/call_kw', {
@@ -125,7 +113,7 @@ export async function GET(req: NextRequest) {
             kwargs: { context },
         }, cookieStr);
 
-        const out = (moves?.result ||).map((m: any) => ({
+        const out = (moves?.result || []).map((m: any) => ({
             id: m.id,
             date: m.date,
             qty_done: m.product_uom_qty,
@@ -139,37 +127,25 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json({ history: out });
     } catch (e: any) {
-        return NextResponse.json({ error: e?.message |
-
-| '查询历史失败' }, { status: 500 });
+        return NextResponse.json({ error: e?.message || '查询历史失败' }, { status: 500 });
     }
 }
 
-// —— POST: 盘点（调整到 new_qty），自动选库位 ——
+// —— POST: 盘点（调整到 new_qty），自动选库位 —— 
 export async function POST(req: NextRequest) {
     try {
         const { product_id, new_qty, location_id } = await req.json();
 
         const ck = cookies();
-        const host = headers().get('host') |
-
-| undefined;
+        const host = headers().get('host') || undefined;
         const preset = resolvePreset(host);
 
-        const base = ck.get('od_base')?.value |
-
-| preset?.url;
+        const base = ck.get('od_base')?.value || preset?.url;
         const session = ck.get('od_session')?.value;
-        const companyId = Number(ck.get('od_company')?.value |
+        const companyId = Number(ck.get('od_company')?.value || 0) || undefined;
 
-| 0) |
-| undefined;
-
-        if (!base ||!session) return NextResponse.json({ error: '未登录' }, { status: 401 });
-        if (!product_id |
-
-| typeof new_qty!== 'number' |
-| Number.isNaN(new_qty)) {
+        if (!base || !session) return NextResponse.json({ error: '未登录' }, { status: 401 });
+        if (!product_id || typeof new_qty !== 'number' || Number.isNaN(new_qty)) {
             return NextResponse.json({ error: '缺少 product_id 或 new_qty' }, { status: 400 });
         }
 
@@ -178,12 +154,10 @@ export async function POST(req: NextRequest) {
         if (companyId) { ctx.company_id = companyId; ctx.allowed_company_ids = [companyId]; }
 
         // ① 确定要用的库位：优先 body.location_id；否则 cookie；否则根据"当前公司"自动找 WH/Stock
-        let locId: number | undefined = Number(location_id |
-
-| 0) |
-| Number(ck.get('od_location')?.value |
-| 0) |
-| undefined;
+        let locId: number | undefined =
+            Number(location_id || 0) ||
+            Number(ck.get('od_location')?.value || 0) ||
+            undefined;
         if (!locId) {
             locId = await getDefaultLocationForCompany(base, cookieStr, companyId);
         }
@@ -197,7 +171,6 @@ export async function POST(req: NextRequest) {
         resp.cookies.set('od_location', String(locId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
 
         // ③ 使用 stock.change.product.qty 向导来确保操作的原子性
-        // 创建向导记录
         const wiz = await rpc(base, '/web/dataset/call_kw', {
             model: 'stock.change.product.qty',
             method: 'create',
@@ -209,7 +182,6 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: '创建库存调整向导失败' }, { status: 500 });
         }
 
-        // 调用向导的 change_product_qty 方法来应用盘点
         await rpc(base, '/web/dataset/call_kw', {
             model: 'stock.change.product.qty',
             method: 'change_product_qty',
@@ -220,8 +192,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true, method: 'legacy.wizard', location_id: locId });
 
     } catch (e: any) {
-        return NextResponse.json({ error: e?.message |
-
-| '库存更新失败' }, { status: 500 });
+        return NextResponse.json({ error: e?.message || '库存更新失败' }, { status: 500 });
     }
 }
