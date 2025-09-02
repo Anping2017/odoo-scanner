@@ -20,7 +20,7 @@ export default function CompanyPicker({ show = false, required = false, initialI
 
   return (
     <fieldset style={{ border: '1px solid #e5e7eb', padding: 12, borderRadius: 8, marginTop: 12 }}>
-      <legend style={{ padding: '0 6px' }}>选择公司（moboplus.co.nz 必选）</legend>
+      <legend style={{ padding: '0 6px' }}>选择公司（1:Brownsbay,2:Birkenhead,3:Avondale,4:Moboplus）</legend>
       {[1, 2, 3, 4].map((id) => (
         <label key={id} style={{ display: 'inline-flex', alignItems: 'center', marginRight: 16 }}>
           <input
