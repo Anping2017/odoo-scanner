@@ -21,7 +21,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
   const [isFocused, setIsFocused] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isZooming, setIsZooming] = useState(false);
-  const [code93Mode, setCode93Mode] = useState(true); // Code 93专门模式
+  const [code93Mode, setCode93Mode] = useState(false); // Code 93优先模式（默认）
 
   const clearRaf = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -224,7 +224,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       clearRaf(); 
     };
     return true;
-  }, [highPrecision, onDetected, stop]);
+  }, [highPrecision, onDetected, stop, code93Mode]);
 
   const startZxing = useCallback(async () => {
     const hints = new Map();
@@ -303,7 +303,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     stopRef.current = () => controls.stop();
     engineRef.current = 'zxing';
     return true;
-  }, [highPrecision, onDetected, stop]);
+  }, [highPrecision, onDetected, stop, code93Mode]);
 
   const start = useCallback(async () => {
     try {
@@ -344,6 +344,16 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     document.addEventListener('visibilitychange', vis);
     return () => document.removeEventListener('visibilitychange', vis);
   }, [start]);
+
+  // 当Code 93模式改变时重新启动摄像头
+  useEffect(() => {
+    if (videoRef.current?.srcObject) {
+      stop();
+      setTimeout(() => {
+        start();
+      }, 100);
+    }
+  }, [code93Mode, start, stop]);
 
   // 拍照识别功能
   async function snapAndDetect() {
@@ -553,7 +563,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
             readerRef.current = null;
           }}
         >
-          Code 93{code93Mode ? '专用' : '优先'}
+          {code93Mode ? 'Code 93专用' : 'Code 93优先'}
         </button>
         
         {/* 缩放控制 */}
@@ -665,7 +675,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           }}>
             将条码对准此区域<br/>
             <span style={{ fontSize: 10, opacity: 0.7 }}>
-              {code93Mode ? 'Code 93专用模式 • 点击聚焦 • 双击放大 • 小码用+按钮放大' : '点击聚焦 • 双击放大 • 小码用+按钮放大'}
+                             {code93Mode ? 'Code 93专用模式 • 点击聚焦 • 双击放大 • 小码用+按钮放大' : 'Code 93优先模式 • 点击聚焦 • 双击放大 • 小码用+按钮放大'}
             </span>
           </div>
         </div>
