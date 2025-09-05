@@ -687,17 +687,17 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
             muted
             playsInline
             autoPlay
-          onClick={handleVideoClick}
-          onDoubleClick={handleVideoDoubleClick}
-          style={{ 
-            position: 'absolute', 
-            inset: 0, 
-            width: '100%', 
-            height: '100%', 
-            objectFit: 'cover',
-            cursor: 'pointer'
-          }}
-        />
+            onClick={handleVideoClick}
+            onDoubleClick={handleVideoDoubleClick}
+            style={{ 
+              position: 'absolute', 
+              inset: 0, 
+              width: '100%', 
+              height: '100%', 
+              objectFit: 'cover',
+              cursor: 'pointer'
+            }}
+          />
         
         {/* 聚焦指示器 */}
         {isFocused && (
