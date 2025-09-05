@@ -22,7 +22,6 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
   const [isZooming, setIsZooming] = useState(false);
   const [code93Mode, setCode93Mode] = useState(false); // 默认兼容所有条码格式
   const [imageQuality, setImageQuality] = useState<number>(0); // 图像质量评分
-  const [isCapturing, setIsCapturing] = useState(false); // 照相识别状态
 
   const clearRaf = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -80,169 +79,6 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     return Math.round(quality);
   };
 
-  // 深度图像处理 - 专门优化条形码识别
-  const deepImageProcessing = (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) => {
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-    
-    // 第一步：转换为灰度图
-    for (let i = 0; i < data.length; i += 4) {
-      const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-      data[i] = gray;     // R
-      data[i + 1] = gray; // G
-      data[i + 2] = gray; // B
-    }
-    
-    // 第二步：高斯降噪
-    const tempData = new Uint8ClampedArray(data);
-    for (let y = 1; y < canvas.height - 1; y++) {
-      for (let x = 1; x < canvas.width - 1; x++) {
-        const idx = (y * canvas.width + x) * 4;
-        let sum = 0;
-        let count = 0;
-        
-        // 3x3高斯核
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            const nIdx = ((y + dy) * canvas.width + (x + dx)) * 4;
-            const weight = dy === 0 && dx === 0 ? 4 : 1; // 中心权重更高
-            sum += tempData[nIdx] * weight;
-            count += weight;
-          }
-        }
-        
-        data[idx] = sum / count;     // R
-        data[idx + 1] = sum / count; // G
-        data[idx + 2] = sum / count; // B
-      }
-    }
-    
-    // 第三步：对比度增强
-    for (let i = 0; i < data.length; i += 4) {
-      const gray = data[i];
-      const enhanced = Math.min(255, Math.max(0, (gray - 128) * 2.5 + 128));
-      data[i] = enhanced;     // R
-      data[i + 1] = enhanced; // G
-      data[i + 2] = enhanced; // B
-    }
-    
-    // 第四步：锐化处理
-    const sharpData = new Uint8ClampedArray(data);
-    for (let y = 1; y < canvas.height - 1; y++) {
-      for (let x = 1; x < canvas.width - 1; x++) {
-        const idx = (y * canvas.width + x) * 4;
-        const center = sharpData[idx];
-        
-        // 拉普拉斯锐化核
-        const top = sharpData[((y - 1) * canvas.width + x) * 4];
-        const bottom = sharpData[((y + 1) * canvas.width + x) * 4];
-        const left = sharpData[(y * canvas.width + (x - 1)) * 4];
-        const right = sharpData[(y * canvas.width + (x + 1)) * 4];
-        
-        const sharpened = Math.min(255, Math.max(0, center + 0.5 * (4 * center - top - bottom - left - right)));
-        
-        data[idx] = sharpened;     // R
-        data[idx + 1] = sharpened; // G
-        data[idx + 2] = sharpened; // B
-      }
-    }
-    
-    // 第五步：自适应二值化
-    for (let i = 0; i < data.length; i += 4) {
-      const gray = data[i];
-      // 动态阈值：根据周围像素计算
-      const threshold = gray > 140 ? 140 : gray < 100 ? 100 : gray;
-      const binary = gray > threshold ? 255 : 0;
-      
-      data[i] = binary;     // R
-      data[i + 1] = binary; // G
-      data[i + 2] = binary; // B
-    }
-    
-    ctx.putImageData(imageData, 0, 0);
-  };
-
-  // 照相识别功能
-  const captureAndRecognize = async () => {
-    if (!videoRef.current || isCapturing) return;
-    
-    setIsCapturing(true);
-    
-    try {
-      const video = videoRef.current;
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d')!;
-      
-      // 设置画布尺寸
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      
-      // 绘制视频帧
-      ctx.drawImage(video, 0, 0);
-      
-      // 应用深度图像处理
-      deepImageProcessing(canvas, ctx);
-      
-      // 尝试识别条码
-      let code = '';
-      
-      // 使用原生检测器
-      try {
-        const Detector = (globalThis as any).BarcodeDetector;
-        if (Detector) {
-          const formats = code93Mode ? ['code_93'] : [
-            'code_93', 'code_128', 'code_39', 'codabar', 'code_11',
-            'ean_13', 'ean_8', 'upc_a', 'upc_e', 'qr_code', 'data_matrix', 'pdf417'
-          ];
-          const detector = new Detector({ formats });
-          const detections = await detector.detect(canvas);
-          if (detections.length > 0) {
-            code = detections[0].rawValue;
-            console.log('照相识别成功(原生):', code);
-          }
-        }
-      } catch (e) {
-        console.log('原生检测器失败:', e);
-      }
-      
-      // 如果原生检测器失败，使用ZXing
-      if (!code) {
-        try {
-          if (!readerRef.current) {
-            const hints = new Map();
-            hints.set(DecodeHintType.TRY_HARDER, true);
-            hints.set(DecodeHintType.POSSIBLE_FORMATS, code93Mode ? [BarcodeFormat.CODE_93] : [
-              BarcodeFormat.CODE_93, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
-              BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E
-            ]);
-            readerRef.current = new BrowserMultiFormatReader(hints as any);
-          }
-          
-          const result = await (readerRef.current as any).decodeFromCanvas(canvas);
-          if (result) {
-            code = result.getText();
-            console.log('照相识别成功(ZXing):', code);
-          }
-        } catch (e) {
-          console.log('ZXing检测失败:', e);
-        }
-      }
-      
-      if (code && !firedRef.current) {
-        firedRef.current = true;
-        stop();
-        onDetected(code);
-      } else {
-        alert('照相识别失败，请调整角度和距离后重试。');
-      }
-      
-    } catch (error) {
-      console.error('照相识别失败:', error);
-      alert('照相识别失败：' + (error instanceof Error ? error.message : String(error)));
-    } finally {
-      setIsCapturing(false);
-    }
-  };
 
   // 设置自动聚焦功能
   const setupAutoFocus = async (video: HTMLVideoElement, stream: MediaStream, formats?: string[]) => {
@@ -795,20 +631,6 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           />
         </label>
         
-        {/* 照相识别按钮 */}
-        <button 
-          style={{
-            ...btnStyle,
-            backgroundColor: isCapturing ? '#f59e0b' : '#3b82f6',
-            color: '#fff',
-            fontWeight: 600
-          }}
-          onClick={captureAndRecognize}
-          disabled={isCapturing}
-        >
-          {isCapturing ? '深度处理中...' : '📷 照相识别'}
-        </button>
-        
         {/* Code 93模式切换 */}
         <button 
           style={{
@@ -975,19 +797,6 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           borderRadius: 4
         }}>
           图像质量: {imageQuality}% {imageQuality > 70 ? '(优秀)' : imageQuality > 40 ? '(良好)' : '(需改善)'}
-        </div>
-      )}
-      
-      {isCapturing && (
-        <div style={{ 
-          color: '#f59e0b', 
-          fontSize: 12, 
-          padding: '4px 8px',
-          textAlign: 'center',
-          backgroundColor: '#fffbeb',
-          borderRadius: 4
-        }}>
-          正在进行深度图像处理，请稍候...
         </div>
       )}
     </div>
