@@ -21,6 +21,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
   const [isFocused, setIsFocused] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isZooming, setIsZooming] = useState(false);
+  const [code93Mode, setCode93Mode] = useState(true); // Code 93专门模式
 
   const clearRaf = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -135,18 +136,21 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     let fmts: string[] = [];
     try { fmts = await (globalThis as any).BarcodeDetector.getSupportedFormats?.() || []; } catch {}
     // 优先支持Code 93，然后是其他格式
-    const desired = [
-      'code_93',  // 优先Code 93
-      'code_128', 'code_39', 'codabar', 'code_11',
-      'ean_13', 'ean_8', 'upc_a', 'upc_e', 'upc_ean_extension',
-      'qr_code', 'data_matrix', 'pdf417', 'aztec',
-      'itf', 'rss_14', 'rss_expanded'
-    ];
+    const desired = code93Mode 
+      ? ['code_93'] // Code 93专用模式：只支持Code 93
+      : [
+          'code_93',  // 优先Code 93
+          'code_128', 'code_39', 'codabar', 'code_11',
+          'ean_13', 'ean_8', 'upc_a', 'upc_e', 'upc_ean_extension',
+          'qr_code', 'data_matrix', 'pdf417', 'aztec',
+          'itf', 'rss_14', 'rss_expanded'
+        ];
     const formats = desired.filter(f => fmts.includes(f));
     if (!formats.length) return false;
     
     const code93Supported = formats.includes('code_93');
-    setDebugInfo(`原生检测器支持格式: ${formats.join(', ')}${code93Supported ? ' (Code 93优先)' : ' (Code 93不支持)'}`);
+    const modeText = code93Mode ? ' (Code 93专用模式)' : ' (Code 93优先)';
+    setDebugInfo(`原生检测器支持格式: ${formats.join(', ')}${code93Supported ? modeText : ' (Code 93不支持)'}`);
 
     const constraints: MediaStreamConstraints = {
       video: {
@@ -225,24 +229,36 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
   const startZxing = useCallback(async () => {
     const hints = new Map();
     hints.set(DecodeHintType.TRY_HARDER, true);
-    hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-      BarcodeFormat.CODE_93,  // 优先Code 93
-      BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.CODABAR,
-      BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
-      BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX, BarcodeFormat.PDF_417, BarcodeFormat.AZTEC,
-      BarcodeFormat.ITF, BarcodeFormat.RSS_14, BarcodeFormat.RSS_EXPANDED
-    ]);
-    // 添加更多识别提示，特别优化Code 93
+    
+    // Code 93专门模式：只识别Code 93，避免误识别
+    if (code93Mode) {
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+        BarcodeFormat.CODE_93  // 只识别Code 93
+      ]);
+    } else {
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+        BarcodeFormat.CODE_93,  // 优先Code 93
+        BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.CODABAR,
+        BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
+        BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX, BarcodeFormat.PDF_417, BarcodeFormat.AZTEC,
+        BarcodeFormat.ITF, BarcodeFormat.RSS_14, BarcodeFormat.RSS_EXPANDED
+      ]);
+    }
+    
+    // Code 93专门优化参数
     hints.set(DecodeHintType.CHARACTER_SET, 'UTF-8');
     hints.set(DecodeHintType.ASSUME_GS1, false);
-    // Code 93专门优化
     hints.set(DecodeHintType.PURE_BARCODE, false); // Code 93需要静默区
-    hints.set(DecodeHintType.NEED_RESULT_POINT_CALLBACK, false); // 不需要结果点回调
-    hints.set(DecodeHintType.ALLOWED_LENGTHS, null); // 允许任意长度
+    hints.set(DecodeHintType.NEED_RESULT_POINT_CALLBACK, false);
+    hints.set(DecodeHintType.ALLOWED_LENGTHS, null);
+    
+    // 小码识别优化
+    hints.set(DecodeHintType.ASSUME_CODE_39_CHECK_DIGIT, false);
+    hints.set(DecodeHintType.RETURN_CODABAR_START_END, false);
     
     if (!readerRef.current) readerRef.current = new BrowserMultiFormatReader(hints as any);
     
-    setDebugInfo('使用ZXing库进行识别 (Code 93优先)');
+    setDebugInfo(code93Mode ? '使用ZXing库进行识别 (Code 93专门模式)' : '使用ZXing库进行识别 (Code 93优先)');
 
     const size = highPrecision
       ? { 
@@ -387,13 +403,15 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       if (typeof Detector !== 'function') return '';
       
       const fmts = await Detector.getSupportedFormats?.() || [];
-      const formats = [
-        'code_93',  // 优先Code 93
-        'code_128', 'code_39', 'codabar', 'code_11',
-        'ean_13', 'ean_8', 'upc_a', 'upc_e', 'upc_ean_extension',
-        'qr_code', 'data_matrix', 'pdf417', 'aztec',
-        'itf', 'rss_14', 'rss_expanded'
-      ].filter(f => fmts.includes(f));
+      const formats = code93Mode 
+        ? ['code_93'].filter(f => fmts.includes(f)) // Code 93专用模式
+        : [
+            'code_93',  // 优先Code 93
+            'code_128', 'code_39', 'codabar', 'code_11',
+            'ean_13', 'ean_8', 'upc_a', 'upc_e', 'upc_ean_extension',
+            'qr_code', 'data_matrix', 'pdf417', 'aztec',
+            'itf', 'rss_14', 'rss_expanded'
+          ].filter(f => fmts.includes(f));
       
       if (!formats.length) return '';
       
@@ -418,19 +436,31 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       if (!readerRef.current) {
         const hints = new Map();
         hints.set(DecodeHintType.TRY_HARDER, true);
-        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-          BarcodeFormat.CODE_93,  // 优先Code 93
-          BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.CODABAR,
-          BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
-          BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX, BarcodeFormat.PDF_417, BarcodeFormat.AZTEC,
-          BarcodeFormat.ITF, BarcodeFormat.RSS_14, BarcodeFormat.RSS_EXPANDED
-        ]);
+        
+        // Code 93专门模式
+        if (code93Mode) {
+          hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+            BarcodeFormat.CODE_93  // 只识别Code 93
+          ]);
+        } else {
+          hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+            BarcodeFormat.CODE_93,  // 优先Code 93
+            BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.CODABAR,
+            BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
+            BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX, BarcodeFormat.PDF_417, BarcodeFormat.AZTEC,
+            BarcodeFormat.ITF, BarcodeFormat.RSS_14, BarcodeFormat.RSS_EXPANDED
+          ]);
+        }
+        
         hints.set(DecodeHintType.CHARACTER_SET, 'UTF-8');
         hints.set(DecodeHintType.ASSUME_GS1, false);
         // Code 93专门优化
         hints.set(DecodeHintType.PURE_BARCODE, false); // Code 93需要静默区
         hints.set(DecodeHintType.NEED_RESULT_POINT_CALLBACK, false); // 不需要结果点回调
         hints.set(DecodeHintType.ALLOWED_LENGTHS, null); // 允许任意长度
+        // 小码识别优化
+        hints.set(DecodeHintType.ASSUME_CODE_39_CHECK_DIGIT, false);
+        hints.set(DecodeHintType.RETURN_CODABAR_START_END, false);
         readerRef.current = new BrowserMultiFormatReader(hints as any);
       }
 
@@ -508,6 +538,23 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
             onChange={onPickFile} 
           />
         </label>
+        
+        {/* Code 93模式切换 */}
+        <button 
+          style={{
+            ...btnStyle,
+            backgroundColor: code93Mode ? '#10b981' : '#fff',
+            color: code93Mode ? '#fff' : '#000',
+            fontWeight: code93Mode ? 600 : 400
+          }}
+          onClick={() => {
+            setCode93Mode(!code93Mode);
+            // 重新初始化识别器
+            readerRef.current = null;
+          }}
+        >
+          Code 93{code93Mode ? '专用' : '优先'}
+        </button>
         
         {/* 缩放控制 */}
         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -618,7 +665,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           }}>
             将条码对准此区域<br/>
             <span style={{ fontSize: 10, opacity: 0.7 }}>
-              点击聚焦 • 双击放大 • 小码用+按钮放大
+              {code93Mode ? 'Code 93专用模式 • 点击聚焦 • 双击放大 • 小码用+按钮放大' : '点击聚焦 • 双击放大 • 小码用+按钮放大'}
             </span>
           </div>
         </div>
