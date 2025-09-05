@@ -116,11 +116,35 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     }
   };
 
-  // 双击放大功能
+  // 双击放大功能（三倍放大并聚焦）
   const handleVideoDoubleClick = async (e: React.MouseEvent<HTMLVideoElement>) => {
     e.preventDefault();
-    const newZoom = zoomLevel === 1 ? 2 : 1;
+    const newZoom = zoomLevel === 1 ? 3 : 1; // 改为三倍放大
     await handleZoomChange(newZoom);
+    
+    // 放大时自动聚焦
+    if (newZoom === 3) {
+      const video = videoRef.current;
+      if (video && video.srcObject) {
+        const stream = video.srcObject as MediaStream;
+        const track = stream.getVideoTracks()[0];
+        if (track) {
+          const capabilities = track.getCapabilities() as any;
+          if (capabilities.focusMode && Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes('continuous')) {
+            try {
+              await track.applyConstraints({
+                focusMode: 'continuous',
+                focusDistance: 0.1
+              } as any);
+              setIsFocused(true);
+              console.log('双击放大后自动聚焦');
+            } catch (error) {
+              console.log('自动聚焦失败:', error);
+            }
+          }
+        }
+      }
+    }
   };
 
   // 验证条码代码格式（首位字母+数字组合，最少7位）
@@ -710,7 +734,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           }}>
             将条码对准此区域<br/>
             <span style={{ fontSize: 10, opacity: 0.7 }}>
-              {code93Mode ? 'Code 93专用模式 • 点击聚焦 • 双击放大 • 小码用+按钮放大' : '兼容所有条码 • 点击聚焦 • 双击放大 • 小码用+按钮放大'}
+              {code93Mode ? 'Code 93专用模式 • 点击聚焦 • 双击3倍放大 • 小码用+按钮放大' : '兼容所有条码 • 点击聚焦 • 双击3倍放大 • 小码用+按钮放大'}
             </span>
           </div>
         </div>
