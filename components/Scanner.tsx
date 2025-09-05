@@ -197,7 +197,8 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     hints.set(DecodeHintType.ASSUME_GS1, false);
     // Code 93专门优化
     hints.set(DecodeHintType.PURE_BARCODE, false); // Code 93需要静默区
-    hints.set(DecodeHintType.ALSO_INVERTED, true); // 支持反色条码
+    hints.set(DecodeHintType.NEED_RESULT_POINT_CALLBACK, false); // 不需要结果点回调
+    hints.set(DecodeHintType.ALLOWED_LENGTHS, null); // 允许任意长度
     
     if (!readerRef.current) readerRef.current = new BrowserMultiFormatReader(hints as any);
     
@@ -384,7 +385,8 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         hints.set(DecodeHintType.ASSUME_GS1, false);
         // Code 93专门优化
         hints.set(DecodeHintType.PURE_BARCODE, false); // Code 93需要静默区
-        hints.set(DecodeHintType.ALSO_INVERTED, true); // 支持反色条码
+        hints.set(DecodeHintType.NEED_RESULT_POINT_CALLBACK, false); // 不需要结果点回调
+        hints.set(DecodeHintType.ALLOWED_LENGTHS, null); // 允许任意长度
         readerRef.current = new BrowserMultiFormatReader(hints as any);
       }
 
