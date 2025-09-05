@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 import { DecodeHintType, BarcodeFormat } from '@zxing/library';
-import { createWorker, PSM, OEM } from 'tesseract.js';
 
 type Props = { onDetected: (text: string) => void; highPrecision?: boolean };
 
@@ -22,9 +21,8 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isZooming, setIsZooming] = useState(false);
   const [code93Mode, setCode93Mode] = useState(false); // 默认兼容所有条码格式
-  const [isOcrProcessing, setIsOcrProcessing] = useState(false);
-  const [multiScaleMode, setMultiScaleMode] = useState(false); // 多尺度识别模式
   const [imageQuality, setImageQuality] = useState<number>(0); // 图像质量评分
+  const [isCapturing, setIsCapturing] = useState(false); // 照相识别状态
 
   const clearRaf = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -213,94 +211,6 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     }
     
     return null;
-  };
-
-  // OCR文字识别功能 - 专门识别条码代码（高精度版本）
-  const performOCR = async (imageFile: File): Promise<string> => {
-    try {
-      setIsOcrProcessing(true);
-      
-      const worker = await createWorker('eng', 1, {
-        logger: m => {
-          if (m.status === 'recognizing text') {
-            console.log(`OCR进度: ${Math.round(m.progress * 100)}%`);
-          }
-        }
-      });
-
-      // 设置OCR参数以提高识别精度
-      await worker.setParameters({
-        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-        tessedit_pageseg_mode: PSM.SINGLE_CHAR, // 单字符模式
-        tessedit_ocr_engine_mode: OEM.LSTM_ONLY // LSTM OCR引擎
-      });
-
-      // 预处理图片以提高OCR准确率
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d')!;
-      const img = new Image();
-      
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
-        img.src = URL.createObjectURL(imageFile);
-      });
-
-      // 使用整个图片进行OCR识别
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.drawImage(img, 0, 0);
-      
-      // 增强对比度、锐化和二值化处理
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const data = imageData.data;
-      
-      for (let i = 0; i < data.length; i += 4) {
-        // 计算灰度值
-        const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-        
-        // 增强对比度
-        const enhanced = Math.min(255, Math.max(0, (gray - 128) * 2.5 + 128));
-        
-        // 二值化处理（阈值128）
-        const binary = enhanced > 128 ? 255 : 0;
-        
-        data[i] = binary;     // R
-        data[i + 1] = binary; // G
-        data[i + 2] = binary; // B
-      }
-      
-      ctx.putImageData(imageData, 0, 0);
-      
-      // 转换为blob进行OCR
-      const processedBlob = await new Promise<Blob>((resolve) => {
-        canvas.toBlob((blob) => resolve(blob!), 'image/png');
-      });
-
-      // 使用高精度OCR设置
-      const { data: { text } } = await worker.recognize(processedBlob);
-      
-      await worker.terminate();
-      URL.revokeObjectURL(img.src);
-      
-      console.log('OCR原始识别结果:', text);
-      
-      // 验证识别结果是否符合条码代码格式
-      const validCode = validateBarcodeCode(text);
-      
-      if (validCode) {
-        console.log('识别到有效条码代码:', validCode);
-        return validCode;
-      } else {
-        console.log('识别结果不符合条码代码格式');
-        return '';
-      }
-    } catch (error) {
-      console.error('OCR识别失败:', error);
-      return '';
-    } finally {
-      setIsOcrProcessing(false);
-    }
   };
 
   const stop = useCallback(() => {
@@ -670,7 +580,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     if (!file) return;
     
     try {
-      // 首先尝试条码识别
+      // 尝试条码识别
       const bmp = await createImageBitmap(file);
       let code = await detectNativeOn(bmp); 
       
@@ -680,20 +590,8 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         firedRef.current = true; 
         stop(); 
         onDetected(code); 
-        return;
-      }
-      
-      // 条码识别失败，尝试OCR文字识别
-      console.log('条码识别失败，尝试OCR文字识别...');
-      const ocrText = await performOCR(file);
-      
-      if (ocrText && ocrText.length > 0 && !firedRef.current) {
-        firedRef.current = true; 
-        stop(); 
-        onDetected(ocrText);
-        console.log('OCR识别成功:', ocrText);
       } else {
-        alert('未识别到条码或条码代码，请选择更清晰的照片重试。\n条码代码格式：首位字母+数字/字母组合，最多12位');
+        alert('未识别到条码，请选择更清晰的照片重试。');
       }
     } catch (e: any) {
       console.error('图片识别失败:', e);
@@ -724,13 +622,12 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       {/* 工具条 */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '8px' }}>
         <label style={{ ...btnStyle, cursor: 'pointer', display: 'inline-block' }}>
-          {isOcrProcessing ? '识别条码代码中...' : '从相册选择(识别条码代码)'}
+          从相册选择
           <input 
             type="file" 
             accept="image/*" 
             style={{ display: 'none' }} 
             onChange={onPickFile}
-            disabled={isOcrProcessing}
           />
         </label>
         
@@ -749,23 +646,6 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           }}
         >
           {code93Mode ? 'Code 93专用' : '兼容所有条码'}
-        </button>
-        
-        {/* 多尺度识别模式 */}
-        <button 
-          style={{
-            ...btnStyle,
-            backgroundColor: multiScaleMode ? '#3b82f6' : '#fff',
-            color: multiScaleMode ? '#fff' : '#000',
-            fontWeight: multiScaleMode ? 600 : 400
-          }}
-          onClick={() => {
-            setMultiScaleMode(!multiScaleMode);
-            // 重新初始化识别器
-            readerRef.current = null;
-          }}
-        >
-          {multiScaleMode ? '多尺度识别' : '标准识别'}
         </button>
         
         {/* 缩放控制 */}
@@ -877,7 +757,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           }}>
             将条码对准此区域<br/>
             <span style={{ fontSize: 10, opacity: 0.7 }}>
-              {code93Mode ? 'Code 93专用模式' : '兼容所有条码'} • {multiScaleMode ? '多尺度识别' : '标准识别'} • 点击聚焦 • 双击3倍放大 • 小码用+按钮放大
+              {code93Mode ? 'Code 93专用模式' : '兼容所有条码'} • 点击聚焦 • 双击3倍放大 • 小码用+按钮放大
             </span>
           </div>
         </div>
@@ -904,19 +784,6 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           borderRadius: 4
         }}>
           {debugInfo}
-        </div>
-      )}
-      
-      {isOcrProcessing && (
-        <div style={{ 
-          color: '#10b981', 
-          fontSize: 12, 
-          padding: '4px 8px',
-          textAlign: 'center',
-          backgroundColor: '#ecfdf5',
-          borderRadius: 4
-        }}>
-          正在识别条码代码（首位字母+数字/字母，最多12位），请稍候...
         </div>
       )}
       
