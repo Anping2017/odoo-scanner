@@ -151,8 +151,8 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         const points = result.getResultPoints();
         if (points && points.length >= 4) {
           // 计算条码边界框
-          const xs = points.map(p => p.getX());
-          const ys = points.map(p => p.getY());
+          const xs = points.map((p: any) => p.getX());
+          const ys = points.map((p: any) => p.getY());
           const minX = Math.min(...xs);
           const maxX = Math.max(...xs);
           const minY = Math.min(...ys);
