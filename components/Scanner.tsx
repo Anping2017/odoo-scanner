@@ -23,6 +23,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
   const [isZooming, setIsZooming] = useState(false);
   const [code93Mode, setCode93Mode] = useState(false); // 默认兼容所有条码格式
   const [isOcrProcessing, setIsOcrProcessing] = useState(false);
+  const [multiScaleMode, setMultiScaleMode] = useState(false); // 多尺度识别模式
 
   const clearRaf = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -283,13 +284,17 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     const constraints: MediaStreamConstraints = {
       video: {
         facingMode: { ideal: 'environment' },
-        width:  { ideal: highPrecision ? 1920 : 1280 }, // 提高分辨率
-        height: { ideal: highPrecision ? 1080 : 720 },  // 提高分辨率
+        width:  { ideal: highPrecision ? 2560 : 1920 }, // 进一步提高分辨率
+        height: { ideal: highPrecision ? 1440 : 1080 }, // 进一步提高分辨率
+        frameRate: { ideal: 30 }, // 提高帧率
         // 添加自动聚焦支持
         focusMode: { ideal: 'continuous' },
         focusDistance: { ideal: 0.1 }, // 近距离聚焦，适合扫码
         // 添加缩放支持
         zoom: { ideal: 1 },
+        // 添加曝光控制
+        exposureMode: { ideal: 'continuous' },
+        whiteBalanceMode: { ideal: 'continuous' },
       } as any,
       audio: false
     };
@@ -380,9 +385,11 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     hints.set(DecodeHintType.NEED_RESULT_POINT_CALLBACK, false);
     hints.set(DecodeHintType.ALLOWED_LENGTHS, null);
     
-    // 小码识别优化
+    // 小码识别优化 - 增强参数
     hints.set(DecodeHintType.ASSUME_CODE_39_CHECK_DIGIT, false);
     hints.set(DecodeHintType.RETURN_CODABAR_START_END, false);
+    hints.set(DecodeHintType.TRY_HARDER, true); // 更努力尝试识别
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, hints.get(DecodeHintType.POSSIBLE_FORMATS)); // 确保格式设置
     
     if (!readerRef.current) readerRef.current = new BrowserMultiFormatReader(hints as any);
     
@@ -390,22 +397,30 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
 
     const size = highPrecision
       ? { 
-          width: { ideal: 1920 }, 
-          height: { ideal: 1080 },
+          width: { ideal: 2560 }, 
+          height: { ideal: 1440 },
+          frameRate: { ideal: 30 },
           // 添加自动聚焦支持
           focusMode: { ideal: 'continuous' },
           focusDistance: { ideal: 0.1 },
           // 添加缩放支持
-          zoom: { ideal: 1 }
+          zoom: { ideal: 1 },
+          // 添加曝光控制
+          exposureMode: { ideal: 'continuous' },
+          whiteBalanceMode: { ideal: 'continuous' },
         } as any
       : { 
-          width: { ideal: 1280 }, 
-          height: { ideal: 720 },
+          width: { ideal: 1920 }, 
+          height: { ideal: 1080 },
+          frameRate: { ideal: 30 },
           // 添加自动聚焦支持
           focusMode: { ideal: 'continuous' },
           focusDistance: { ideal: 0.1 },
           // 添加缩放支持
-          zoom: { ideal: 1 }
+          zoom: { ideal: 1 },
+          // 添加曝光控制
+          exposureMode: { ideal: 'continuous' },
+          whiteBalanceMode: { ideal: 'continuous' },
         } as any;
 
     const video = videoRef.current!;
@@ -641,6 +656,23 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           {code93Mode ? 'Code 93专用' : '兼容所有条码'}
         </button>
         
+        {/* 多尺度识别模式 */}
+        <button 
+          style={{
+            ...btnStyle,
+            backgroundColor: multiScaleMode ? '#3b82f6' : '#fff',
+            color: multiScaleMode ? '#fff' : '#000',
+            fontWeight: multiScaleMode ? 600 : 400
+          }}
+          onClick={() => {
+            setMultiScaleMode(!multiScaleMode);
+            // 重新初始化识别器
+            readerRef.current = null;
+          }}
+        >
+          {multiScaleMode ? '多尺度识别' : '标准识别'}
+        </button>
+        
         {/* 缩放控制 */}
         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
           <button 
@@ -750,7 +782,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           }}>
             将条码对准此区域<br/>
             <span style={{ fontSize: 10, opacity: 0.7 }}>
-              {code93Mode ? 'Code 93专用模式 • 点击聚焦 • 双击3倍放大 • 小码用+按钮放大' : '兼容所有条码 • 点击聚焦 • 双击3倍放大 • 小码用+按钮放大'}
+              {code93Mode ? 'Code 93专用模式' : '兼容所有条码'} • {multiScaleMode ? '多尺度识别' : '标准识别'} • 点击聚焦 • 双击3倍放大 • 小码用+按钮放大
             </span>
           </div>
         </div>
