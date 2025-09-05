@@ -33,10 +33,18 @@ export default function ScanPage() {
   const [counted, setCounted] = useState<string>(''); // 盘点数量
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [updating, setUpdating] = useState(false);
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
 
   const fetchLockRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const lastFetchedCodeRef = useRef<string>('');
+
+  // Toast通知函数
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message, type });
+    // 3秒后自动消失
+    setTimeout(() => setToast(null), 3000);
+  }, []);
 
   const loadHistory = useCallback(async (pid: number) => {
     try {
@@ -128,7 +136,7 @@ export default function ScanPage() {
     if (!product?.id) return;
     const qty = Number(counted);
     if (Number.isNaN(qty)) {
-      alert('请输入正确的数量');
+      showToast('请输入正确的数量', 'error');
       return;
     }
     setUpdating(true);
@@ -156,6 +164,7 @@ export default function ScanPage() {
           });
           const productData = await productRes.json().catch(() => ({}));
           const updatedProduct = productData?.product || null;
+          
           setProduct(updatedProduct);
           // 更新盘点数量为新的库存数量
           setCounted(
@@ -168,9 +177,9 @@ export default function ScanPage() {
       
       // 重新加载历史记录
       if (product.id) await loadHistory(product.id);
-      alert('库存已更新（Odoo 中已记录库存调整历史）。');
+      showToast('库存已更新（Odoo 中已记录库存调整历史）', 'success');
     } catch (e: any) {
-      alert(e?.message || '库存更新失败');
+      showToast(e?.message || '库存更新失败', 'error');
     } finally {
       setUpdating(false);
     }
@@ -449,6 +458,45 @@ export default function ScanPage() {
           清空
         </button>
       </form>
+      
+      {/* Toast通知 */}
+      {toast && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 9999,
+            padding: '12px 20px',
+            borderRadius: '8px',
+            color: '#fff',
+            fontWeight: 500,
+            fontSize: '14px',
+            maxWidth: '90%',
+            textAlign: 'center',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+            backgroundColor: toast.type === 'success' ? '#10b981' : 
+                           toast.type === 'error' ? '#ef4444' : '#3b82f6',
+            animation: 'slideDown 0.3s ease-out',
+          }}
+        >
+          {toast.message}
+        </div>
+      )}
+      
+      <style jsx>{`
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }
