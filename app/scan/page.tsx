@@ -143,10 +143,30 @@ export default function ScanPage() {
       if (!res.ok || !data?.ok) {
         throw new Error(data?.error || '更新失败');
       }
-      // 成功后：刷新产品与历史
-      // 允许再次查询同一条码
+      
+      // 成功后：强制刷新产品与历史数据
+      // 清空缓存引用，确保重新获取最新数据
       lastFetchedCodeRef.current = '';
-      if (lastCode) await fetchByCode(lastCode);
+      
+      // 直接调用API获取最新产品信息，绕过缓存
+      if (lastCode) {
+        try {
+          const productRes = await fetch(`/api/product?code=${encodeURIComponent(lastCode)}`, {
+            cache: 'no-store',
+          });
+          const productData = await productRes.json().catch(() => ({}));
+          const updatedProduct = productData?.product || null;
+          setProduct(updatedProduct);
+          // 更新盘点数量为新的库存数量
+          setCounted(
+            typeof updatedProduct?.qty_available === 'number' ? String(updatedProduct.qty_available) : counted
+          );
+        } catch (e) {
+          console.warn('刷新产品信息失败:', e);
+        }
+      }
+      
+      // 重新加载历史记录
       if (product.id) await loadHistory(product.id);
       alert('库存已更新（Odoo 中已记录库存调整历史）。');
     } catch (e: any) {
@@ -154,7 +174,7 @@ export default function ScanPage() {
     } finally {
       setUpdating(false);
     }
-  }, [product?.id, counted, lastCode, fetchByCode, loadHistory]);
+  }, [product?.id, counted, lastCode, loadHistory]);
 
   return (
     <div

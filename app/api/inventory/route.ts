@@ -171,65 +171,140 @@ export async function POST(req: NextRequest) {
     const resp = NextResponse.json({ ok: true, location_id: locId, method: 'pending' });
     resp.cookies.set('od_location', String(locId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
 
-    // ③ 查/建 quant 并应用盘点
-    // search quant
-    const found = await rpc(base, '/web/dataset/call_kw', {
-      model: 'stock.quant',
-      method: 'search',
-      args: [[['product_id', '=', product_id], ['location_id', '=', locId]]],
-      kwargs: { limit: 1, context: ctx },
-    }, cookieStr);
-
-    let quantId: number | null = Array.isArray(found?.result) && found.result.length ? found.result[0] : null;
-
-    if (!quantId) {
-      const created = await rpc(base, '/web/dataset/call_kw', {
-        model: 'stock.quant',
-        method: 'create',
-        args: [[{ product_id, location_id: locId, inventory_quantity: new_qty }]],
-        kwargs: { context: ctx },
-      }, cookieStr);
-      quantId = created?.result ?? null;
-    } else {
-      await rpc(base, '/web/dataset/call_kw', {
-        model: 'stock.quant',
-        method: 'write',
-        args: [[quantId], { inventory_quantity: new_qty }],
-        kwargs: { context: ctx },
-      }, cookieStr);
-    }
-
-    // 尝试新方法：应用盘点 -> 生成可追踪的库存调整
+    // ③ Odoo 17 库存调整方法
+    // 尝试多种方法以确保兼容性
     try {
-      await rpc(base, '/web/dataset/call_kw', {
-        model: 'stock.quant',
-        method: 'action_apply_inventory',
-        args: [[quantId]],
-        kwargs: { context: ctx },
-      }, cookieStr);
+      // 方法1: 尝试使用 stock.inventory 模型（Odoo 17推荐）
+      try {
+        // 创建库存调整记录
+        const inventory = await rpc(base, '/web/dataset/call_kw', {
+          model: 'stock.inventory',
+          method: 'create',
+          args: [[{
+            name: `库存调整 - ${new Date().toLocaleString()}`,
+            location_ids: [[6, 0, [locId]]],
+            product_ids: [[6, 0, [product_id]]],
+            state: 'draft'
+          }]],
+          kwargs: { context: ctx },
+        }, cookieStr);
 
-      return NextResponse.json({ ok: true, method: 'quant.apply', location_id: locId });
-    } catch {
-      // 旧版向导兜底
+        if (inventory?.result) {
+          // 添加库存调整行
+          const line = await rpc(base, '/web/dataset/call_kw', {
+            model: 'stock.inventory.line',
+            method: 'create',
+            args: [[{
+              inventory_id: inventory.result,
+              product_id: product_id,
+              location_id: locId,
+              product_qty: new_qty,
+              theoretical_qty: 0 // 当前理论库存，设为0让系统自动计算
+            }]],
+            kwargs: { context: ctx },
+          }, cookieStr);
+
+          if (line?.result) {
+            // 确认库存调整
+            await rpc(base, '/web/dataset/call_kw', {
+              model: 'stock.inventory',
+              method: 'action_validate',
+              args: [[inventory.result]],
+              kwargs: { context: ctx },
+            }, cookieStr);
+
+            return NextResponse.json({ ok: true, method: 'stock.inventory', location_id: locId });
+          }
+        }
+      } catch (inventoryError) {
+        console.warn('stock.inventory 方法失败，尝试其他方法:', inventoryError);
+      }
+
+      // 方法2: 尝试使用 stock.quant 直接调整（Odoo 17备用方法）
+      try {
+        // 查找或创建 quant 记录
+        const found = await rpc(base, '/web/dataset/call_kw', {
+          model: 'stock.quant',
+          method: 'search',
+          args: [[['product_id', '=', product_id], ['location_id', '=', locId]]],
+          kwargs: { limit: 1, context: ctx },
+        }, cookieStr);
+
+        let quantId = Array.isArray(found?.result) && found.result.length ? found.result[0] : null;
+
+        if (!quantId) {
+          // 创建新的 quant 记录
+          const created = await rpc(base, '/web/dataset/call_kw', {
+            model: 'stock.quant',
+            method: 'create',
+            args: [[{
+              product_id: product_id,
+              location_id: locId,
+              quantity: new_qty,
+              inventory_quantity: new_qty
+            }]],
+            kwargs: { context: ctx },
+          }, cookieStr);
+          quantId = created?.result;
+        } else {
+          // 更新现有 quant 记录
+          await rpc(base, '/web/dataset/call_kw', {
+            model: 'stock.quant',
+            method: 'write',
+            args: [[quantId], {
+              quantity: new_qty,
+              inventory_quantity: new_qty
+            }],
+            kwargs: { context: ctx },
+          }, cookieStr);
+        }
+
+        if (quantId) {
+          // 应用库存调整
+          await rpc(base, '/web/dataset/call_kw', {
+            model: 'stock.quant',
+            method: 'action_apply_inventory',
+            args: [[quantId]],
+            kwargs: { context: ctx },
+          }, cookieStr);
+
+          return NextResponse.json({ ok: true, method: 'stock.quant', location_id: locId });
+        }
+      } catch (quantError) {
+        console.warn('stock.quant 方法失败，尝试旧版方法:', quantError);
+      }
+
+      // 方法3: 回退到旧版向导（如果仍然可用）
       try {
         const wiz = await rpc(base, '/web/dataset/call_kw', {
           model: 'stock.change.product.qty',
           method: 'create',
-          args: [[{ product_id, new_quantity: new_qty, location_id: locId }]],
+          args: [[{ 
+            product_id, 
+            new_quantity: new_qty, 
+            location_id: locId 
+          }]],
           kwargs: { context: ctx },
         }, cookieStr);
 
-        await rpc(base, '/web/dataset/call_kw', {
-          model: 'stock.change.product.qty',
-          method: 'change_product_qty',
-          args: [[wiz?.result]],
-          kwargs: { context: ctx },
-        }, cookieStr);
+        if (wiz?.result) {
+          await rpc(base, '/web/dataset/call_kw', {
+            model: 'stock.change.product.qty',
+            method: 'change_product_qty',
+            args: [[wiz.result]],
+            kwargs: { context: ctx },
+          }, cookieStr);
 
-        return NextResponse.json({ ok: true, method: 'legacy.wizard', location_id: locId });
-      } catch {
-        return NextResponse.json({ error: '库存更新失败：quant 和向导都不可用' }, { status: 500 });
+          return NextResponse.json({ ok: true, method: 'legacy.wizard', location_id: locId });
+        }
+      } catch (legacyError) {
+        console.warn('旧版向导也失败:', legacyError);
       }
+
+      throw new Error('所有库存调整方法都失败了');
+    } catch (e: any) {
+      console.error('库存更新失败:', e);
+      return NextResponse.json({ error: e?.message || '库存更新失败' }, { status: 500 });
     }
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || '库存更新失败' }, { status: 500 });

@@ -1,4 +1,4 @@
-// File: C:\working\next.js\odoo-inventory-scanner\app\api\inventory\route.ts
+// File: C:\working\next.js\odoo-scanner\app\api\inventory\route.ts
 import * as entry from '../../../../../app/api/inventory/route.js'
 import type { NextRequest } from 'next/server.js'
 

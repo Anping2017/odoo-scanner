@@ -1,4 +1,4 @@
-// File: C:\working\next.js\odoo-inventory-scanner\app\scan\page.tsx
+// File: C:\working\next.js\odoo-scanner\app\scan\page.tsx
 import * as entry from '../../../../app/scan/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 
