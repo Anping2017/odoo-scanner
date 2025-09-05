@@ -19,6 +19,8 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
   const [err, setErr] = useState('');
   const [debugInfo, setDebugInfo] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [isZooming, setIsZooming] = useState(false);
 
   const clearRaf = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -83,6 +85,42 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     }
   };
 
+  // 缩放控制功能
+  const handleZoomChange = async (newZoom: number) => {
+    if (!videoRef.current) return;
+    
+    try {
+      const stream = videoRef.current.srcObject as MediaStream;
+      const track = stream?.getVideoTracks()[0];
+      
+      if (track) {
+        const capabilities = track.getCapabilities() as any;
+        if (capabilities.zoom && capabilities.zoom.max > 1) {
+          const maxZoom = capabilities.zoom.max;
+          const minZoom = capabilities.zoom.min || 1;
+          const clampedZoom = Math.max(minZoom, Math.min(maxZoom, newZoom));
+          
+          await track.applyConstraints({
+            zoom: clampedZoom
+          } as any);
+          
+          setZoomLevel(clampedZoom);
+          setIsZooming(true);
+          setTimeout(() => setIsZooming(false), 500);
+        }
+      }
+    } catch (e) {
+      console.warn('缩放失败:', e);
+    }
+  };
+
+  // 双击放大功能
+  const handleVideoDoubleClick = async (e: React.MouseEvent<HTMLVideoElement>) => {
+    e.preventDefault();
+    const newZoom = zoomLevel === 1 ? 2 : 1;
+    await handleZoomChange(newZoom);
+  };
+
   const stop = useCallback(() => {
     try { stopRef.current?.(); } catch {}
     stopRef.current = null;
@@ -113,11 +151,13 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     const constraints: MediaStreamConstraints = {
       video: {
         facingMode: { ideal: 'environment' },
-        width:  { ideal: highPrecision ? 1280 : 720 },
-        height: { ideal: highPrecision ? 720 : 480 },
+        width:  { ideal: highPrecision ? 1920 : 1280 }, // 提高分辨率
+        height: { ideal: highPrecision ? 1080 : 720 },  // 提高分辨率
         // 添加自动聚焦支持
         focusMode: { ideal: 'continuous' },
         focusDistance: { ideal: 0.1 }, // 近距离聚焦，适合扫码
+        // 添加缩放支持
+        zoom: { ideal: 1 },
       } as any,
       audio: false
     };
@@ -206,18 +246,22 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
 
     const size = highPrecision
       ? { 
+          width: { ideal: 1920 }, 
+          height: { ideal: 1080 },
+          // 添加自动聚焦支持
+          focusMode: { ideal: 'continuous' },
+          focusDistance: { ideal: 0.1 },
+          // 添加缩放支持
+          zoom: { ideal: 1 }
+        } as any
+      : { 
           width: { ideal: 1280 }, 
           height: { ideal: 720 },
           // 添加自动聚焦支持
           focusMode: { ideal: 'continuous' },
-          focusDistance: { ideal: 0.1 }
-        } as any
-      : { 
-          width: { ideal: 720 }, 
-          height: { ideal: 480 },
-          // 添加自动聚焦支持
-          focusMode: { ideal: 'continuous' },
-          focusDistance: { ideal: 0.1 }
+          focusDistance: { ideal: 0.1 },
+          // 添加缩放支持
+          zoom: { ideal: 1 }
         } as any;
 
     const video = videoRef.current!;
@@ -464,6 +508,27 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
             onChange={onPickFile} 
           />
         </label>
+        
+        {/* 缩放控制 */}
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <button 
+            style={btnStyle} 
+            onClick={() => handleZoomChange(Math.max(1, zoomLevel - 0.5))}
+            disabled={zoomLevel <= 1}
+          >
+            −
+          </button>
+          <span style={{ fontSize: 12, minWidth: 40, textAlign: 'center' }}>
+            {zoomLevel.toFixed(1)}×
+          </span>
+          <button 
+            style={btnStyle} 
+            onClick={() => handleZoomChange(zoomLevel + 0.5)}
+            disabled={zoomLevel >= 3}
+          >
+            +
+          </button>
+        </div>
       </div>
 
       {/* 视频区域 */}
@@ -481,6 +546,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           playsInline
           autoPlay
           onClick={handleVideoClick}
+          onDoubleClick={handleVideoDoubleClick}
           style={{ 
             position: 'absolute', 
             inset: 0, 
@@ -508,6 +574,24 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           }} />
         )}
         
+        {/* 缩放指示器 */}
+        {isZooming && (
+          <div style={{
+            position: 'absolute',
+            top: 20,
+            right: 20,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            color: '#fff',
+            padding: '8px 12px',
+            borderRadius: 8,
+            fontSize: 14,
+            fontWeight: 600,
+            pointerEvents: 'none'
+          }}>
+            {zoomLevel.toFixed(1)}×
+          </div>
+        )}
+        
         {/* 扫码框指示器 */}
         <div style={{
           position: 'absolute',
@@ -525,14 +609,17 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         }}>
           <div style={{
             color: 'rgba(255, 255, 255, 0.8)',
-            fontSize: 14,
+            fontSize: 12,
             fontWeight: 600,
             textAlign: 'center',
             backgroundColor: 'rgba(0, 0, 0, 0.3)',
             padding: '4px 8px',
             borderRadius: 4
           }}>
-            将条码对准此区域
+            将条码对准此区域<br/>
+            <span style={{ fontSize: 10, opacity: 0.7 }}>
+              点击聚焦 • 双击放大 • 小码用+按钮放大
+            </span>
           </div>
         </div>
       </div>
