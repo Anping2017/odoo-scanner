@@ -17,6 +17,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
   const captureLockRef = useRef(false);
 
   const [err, setErr] = useState('');
+  const [debugInfo, setDebugInfo] = useState('');
 
   const clearRaf = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -36,9 +37,17 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
 
     let fmts: string[] = [];
     try { fmts = await (globalThis as any).BarcodeDetector.getSupportedFormats?.() || []; } catch {}
-    const desired = ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code'];
+    // 扩展支持的条码格式
+    const desired = [
+      'ean_13', 'ean_8', 'upc_a', 'upc_e', 'upc_ean_extension',
+      'code_128', 'code_39', 'code_93', 'codabar', 'code_11',
+      'qr_code', 'data_matrix', 'pdf417', 'aztec',
+      'itf', 'rss_14', 'rss_expanded'
+    ];
     const formats = desired.filter(f => fmts.includes(f));
     if (!formats.length) return false;
+    
+    setDebugInfo(`原生检测器支持格式: ${formats.join(', ')}`);
 
     const constraints: MediaStreamConstraints = {
       video: {
@@ -84,12 +93,15 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         const codes = await detector.detect(canvas);
         const txt = codes?.[0]?.rawValue;
         if (txt) {
+          console.log('原生检测器识别成功:', txt, '格式:', codes[0]?.format);
           firedRef.current = true; 
           stop(); 
           onDetected(String(txt)); 
           return;
         }
-      } catch {}
+      } catch (e) {
+        console.warn('原生检测器识别失败:', e);
+      }
 
       rafRef.current = requestAnimationFrame(loop);
     };
@@ -108,9 +120,17 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     hints.set(DecodeHintType.TRY_HARDER, true);
     hints.set(DecodeHintType.POSSIBLE_FORMATS, [
       BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
-      BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.QR_CODE
+      BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.CODE_93, BarcodeFormat.CODABAR,
+      BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX, BarcodeFormat.PDF_417, BarcodeFormat.AZTEC,
+      BarcodeFormat.ITF, BarcodeFormat.RSS_14, BarcodeFormat.RSS_EXPANDED
     ]);
+    // 添加更多识别提示
+    hints.set(DecodeHintType.CHARACTER_SET, 'UTF-8');
+    hints.set(DecodeHintType.ASSUME_GS1, false);
+    
     if (!readerRef.current) readerRef.current = new BrowserMultiFormatReader(hints as any);
+    
+    setDebugInfo('使用ZXing库进行识别');
 
     const size = highPrecision
       ? { width: { ideal: 1280 }, height: { ideal: 720 } }
@@ -128,9 +148,11 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       video,
       (res: any) => {
         if (!res || firedRef.current) return;
+        const text = res.getText?.() ?? res.text ?? '';
+        console.log('ZXing识别成功:', text, '格式:', res.getBarcodeFormat?.());
         firedRef.current = true; 
         stop(); 
-        onDetected(res.getText?.() ?? res.text ?? '');
+        onDetected(text);
       }
     );
 
@@ -237,8 +259,12 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       if (typeof Detector !== 'function') return '';
       
       const fmts = await Detector.getSupportedFormats?.() || [];
-      const formats = ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code']
-        .filter(f => fmts.includes(f));
+      const formats = [
+        'ean_13', 'ean_8', 'upc_a', 'upc_e', 'upc_ean_extension',
+        'code_128', 'code_39', 'code_93', 'codabar', 'code_11',
+        'qr_code', 'data_matrix', 'pdf417', 'aztec',
+        'itf', 'rss_14', 'rss_expanded'
+      ].filter(f => fmts.includes(f));
       
       if (!formats.length) return '';
       
@@ -265,8 +291,12 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         hints.set(DecodeHintType.TRY_HARDER, true);
         hints.set(DecodeHintType.POSSIBLE_FORMATS, [
           BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
-          BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.QR_CODE
+          BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.CODE_93, BarcodeFormat.CODABAR,
+          BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX, BarcodeFormat.PDF_417, BarcodeFormat.AZTEC,
+          BarcodeFormat.ITF, BarcodeFormat.RSS_14, BarcodeFormat.RSS_EXPANDED
         ]);
+        hints.set(DecodeHintType.CHARACTER_SET, 'UTF-8');
+        hints.set(DecodeHintType.ASSUME_GS1, false);
         readerRef.current = new BrowserMultiFormatReader(hints as any);
       }
 
@@ -337,6 +367,15 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
             onChange={onPickFile} 
           />
         </label>
+        <button 
+          style={btnStyle} 
+          onClick={() => {
+            const code = prompt('手动输入条码进行测试:');
+            if (code) onDetected(code);
+          }}
+        >
+          手动输入测试
+        </button>
       </div>
 
       {/* 视频区域 */}
@@ -371,6 +410,19 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           textAlign: 'center'
         }}>
           {err}
+        </div>
+      )}
+      
+      {debugInfo && (
+        <div style={{ 
+          color: '#6b7280', 
+          fontSize: 12, 
+          padding: '4px 8px',
+          textAlign: 'center',
+          backgroundColor: '#f9fafb',
+          borderRadius: 4
+        }}>
+          {debugInfo}
         </div>
       )}
     </div>
