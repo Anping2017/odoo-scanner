@@ -406,7 +406,14 @@ export default function ScanPage() {
           inputMode="search"
           placeholder="手动输入/粘贴条码"
           value={codeInput}
-          onChange={(e) => setCodeInput(e.target.value)}
+          onChange={(e) => {
+            let value = e.target.value;
+            // 自动将首字母大写
+            if (value.length > 0) {
+              value = value.charAt(0).toUpperCase() + value.slice(1);
+            }
+            setCodeInput(value);
+          }}
           style={{
             flex: 1,
             padding: '12px 12px',

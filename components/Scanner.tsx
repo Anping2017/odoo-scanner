@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 import { DecodeHintType, BarcodeFormat } from '@zxing/library';
+import { createWorker } from 'tesseract.js';
 
 type Props = { onDetected: (text: string) => void; highPrecision?: boolean };
 
@@ -14,14 +15,14 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
   const rafRef = useRef<number | null>(null);
   const firedRef = useRef(false);
   const engineRef = useRef<'native' | 'zxing' | null>(null);
-  const captureLockRef = useRef(false);
 
   const [err, setErr] = useState('');
   const [debugInfo, setDebugInfo] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isZooming, setIsZooming] = useState(false);
-  const [code93Mode, setCode93Mode] = useState(false); // Code 93优先模式（默认）
+  const [code93Mode, setCode93Mode] = useState(true); // Code 93专门模式
+  const [isOcrProcessing, setIsOcrProcessing] = useState(false);
 
   const clearRaf = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -120,6 +121,73 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     e.preventDefault();
     const newZoom = zoomLevel === 1 ? 2 : 1;
     await handleZoomChange(newZoom);
+  };
+
+  // OCR文字识别功能
+  const performOCR = async (imageFile: File): Promise<string> => {
+    try {
+      setIsOcrProcessing(true);
+      
+      const worker = await createWorker('eng', 1, {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            console.log(`OCR进度: ${Math.round(m.progress * 100)}%`);
+          }
+        }
+      });
+
+      // 预处理图片以提高OCR准确率
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+      const img = new Image();
+      
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = URL.createObjectURL(imageFile);
+      });
+
+      // 调整图片大小和对比度
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+      
+      // 增强对比度
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      
+      for (let i = 0; i < data.length; i += 4) {
+        // 增强对比度
+        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * 1.5 + 128));     // R
+        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * 1.5 + 128)); // G
+        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * 1.5 + 128)); // B
+      }
+      
+      ctx.putImageData(imageData, 0, 0);
+      
+      // 转换为blob进行OCR
+      const processedBlob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob((blob) => resolve(blob!), 'image/png');
+      });
+
+      const { data: { text } } = await worker.recognize(processedBlob);
+      
+      await worker.terminate();
+      URL.revokeObjectURL(img.src);
+      
+      // 清理识别结果
+      const cleanedText = text
+        .replace(/\s+/g, ' ') // 合并多个空格
+        .replace(/[^\w\s]/g, '') // 移除特殊字符
+        .trim();
+      
+      return cleanedText;
+    } catch (error) {
+      console.error('OCR识别失败:', error);
+      return '';
+    } finally {
+      setIsOcrProcessing(false);
+    }
   };
 
   const stop = useCallback(() => {
@@ -224,7 +292,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       clearRaf(); 
     };
     return true;
-  }, [highPrecision, onDetected, stop, code93Mode]);
+  }, [highPrecision, onDetected, stop]);
 
   const startZxing = useCallback(async () => {
     const hints = new Map();
@@ -303,7 +371,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     stopRef.current = () => controls.stop();
     engineRef.current = 'zxing';
     return true;
-  }, [highPrecision, onDetected, stop, code93Mode]);
+  }, [highPrecision, onDetected, stop]);
 
   const start = useCallback(async () => {
     try {
@@ -345,67 +413,6 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     return () => document.removeEventListener('visibilitychange', vis);
   }, [start]);
 
-  // 当Code 93模式改变时重新启动摄像头
-  useEffect(() => {
-    if (videoRef.current?.srcObject) {
-      stop();
-      setTimeout(() => {
-        start();
-      }, 100);
-    }
-  }, [code93Mode, start, stop]);
-
-  // 拍照识别功能
-  async function snapAndDetect() {
-    if (captureLockRef.current) return; 
-    captureLockRef.current = true;
-    try {
-      const video = videoRef.current!;
-      if (!video.videoWidth || !video.videoHeight) {
-        alert('摄像头未就绪');
-        return;
-      }
-
-      if (!canvasRef.current) {
-        const c = document.createElement('canvas');
-        c.style.display = 'none';
-        canvasRef.current = c;
-        document.body.appendChild(c);
-      }
-      
-      const canvas = canvasRef.current!;
-      const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-      
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      const blob = await new Promise<Blob | null>(res => 
-        canvas.toBlob(b => res(b), 'image/jpeg', 0.9)
-      );
-
-      if (!blob) throw new Error('无法获取照片');
-
-      // 尝试使用原生检测
-      const bmp = await createImageBitmap(blob);
-      let code = await detectNativeOn(bmp); 
-      
-      // 如果原生检测失败，尝试 ZXing
-      if (!code) code = await detectZxingFromBlob(blob);
-      
-      if (code && !firedRef.current) { 
-        firedRef.current = true; 
-        stop(); 
-        onDetected(code); 
-      } else {
-        alert('未识别到条码，请靠近/补光/保持条码平直后重试。');
-      }
-    } catch (e: any) {
-      alert('拍照识别失败：' + (e?.message || String(e)));
-    } finally {
-      captureLockRef.current = false;
-    }
-  }
 
   async function detectNativeOn(source: ImageBitmap | HTMLCanvasElement): Promise<string> {
     try {
@@ -492,10 +499,8 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     const file = e.target.files?.[0]; 
     if (!file) return;
     
-    if (captureLockRef.current) return; 
-    captureLockRef.current = true;
-    
     try {
+      // 首先尝试条码识别
       const bmp = await createImageBitmap(file);
       let code = await detectNativeOn(bmp); 
       
@@ -505,14 +510,26 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         firedRef.current = true; 
         stop(); 
         onDetected(code); 
+        return;
+      }
+      
+      // 条码识别失败，尝试OCR文字识别
+      console.log('条码识别失败，尝试OCR文字识别...');
+      const ocrText = await performOCR(file);
+      
+      if (ocrText && ocrText.length > 0 && !firedRef.current) {
+        firedRef.current = true; 
+        stop(); 
+        onDetected(ocrText);
+        console.log('OCR识别成功:', ocrText);
       } else {
-        alert('未识别到条码，请选择更清晰的照片重试。');
+        alert('未识别到条码或文字，请选择更清晰的照片重试。');
       }
     } catch (e: any) {
+      console.error('图片识别失败:', e);
       alert('图片识别失败：' + (e?.message || String(e)));
     } finally {
       e.target.value = '';
-      captureLockRef.current = false;
     }
   }
 
@@ -536,16 +553,14 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       `}</style>
       {/* 工具条 */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '8px' }}>
-        <button style={btnStyle} onClick={snapAndDetect}>
-          拍照识别
-        </button>
         <label style={{ ...btnStyle, cursor: 'pointer', display: 'inline-block' }}>
-          从相册选择
+          {isOcrProcessing ? 'OCR识别中...' : '从相册选择'}
           <input 
             type="file" 
             accept="image/*" 
             style={{ display: 'none' }} 
-            onChange={onPickFile} 
+            onChange={onPickFile}
+            disabled={isOcrProcessing}
           />
         </label>
         
@@ -563,7 +578,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
             readerRef.current = null;
           }}
         >
-          {code93Mode ? 'Code 93专用' : 'Code 93优先'}
+          Code 93{code93Mode ? '专用' : '优先'}
         </button>
         
         {/* 缩放控制 */}
@@ -675,7 +690,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           }}>
             将条码对准此区域<br/>
             <span style={{ fontSize: 10, opacity: 0.7 }}>
-                             {code93Mode ? 'Code 93专用模式 • 点击聚焦 • 双击放大 • 小码用+按钮放大' : 'Code 93优先模式 • 点击聚焦 • 双击放大 • 小码用+按钮放大'}
+              {code93Mode ? 'Code 93专用模式 • 点击聚焦 • 双击放大 • 小码用+按钮放大' : '点击聚焦 • 双击放大 • 小码用+按钮放大'}
             </span>
           </div>
         </div>
@@ -702,6 +717,19 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           borderRadius: 4
         }}>
           {debugInfo}
+        </div>
+      )}
+      
+      {isOcrProcessing && (
+        <div style={{ 
+          color: '#10b981', 
+          fontSize: 12, 
+          padding: '4px 8px',
+          textAlign: 'center',
+          backgroundColor: '#ecfdf5',
+          borderRadius: 4
+        }}>
+          OCR文字识别中，请稍候...
         </div>
       )}
     </div>
