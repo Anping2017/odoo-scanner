@@ -21,7 +21,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
   const [isFocused, setIsFocused] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isZooming, setIsZooming] = useState(false);
-  const [code93Mode, setCode93Mode] = useState(true); // Code 93专门模式
+  const [code93Mode, setCode93Mode] = useState(false); // 默认兼容所有条码格式
   const [isOcrProcessing, setIsOcrProcessing] = useState(false);
 
   const clearRaf = () => {
@@ -291,7 +291,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     if (!formats.length) return false;
     
     const code93Supported = formats.includes('code_93');
-    const modeText = code93Mode ? ' (Code 93专用模式)' : ' (Code 93优先)';
+    const modeText = code93Mode ? ' (Code 93专用模式)' : ' (兼容所有条码)';
     setDebugInfo(`原生检测器支持格式: ${formats.join(', ')}${code93Supported ? modeText : ' (Code 93不支持)'}`);
 
     const constraints: MediaStreamConstraints = {
@@ -652,7 +652,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
             readerRef.current = null;
           }}
         >
-          Code 93{code93Mode ? '专用' : '优先'}
+          {code93Mode ? 'Code 93专用' : '兼容所有条码'}
         </button>
         
         {/* 缩放控制 */}
@@ -764,7 +764,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           }}>
             将条码对准此区域<br/>
             <span style={{ fontSize: 10, opacity: 0.7 }}>
-              {code93Mode ? 'Code 93专用模式 • 点击聚焦 • 双击放大 • 小码用+按钮放大' : '点击聚焦 • 双击放大 • 小码用+按钮放大'}
+              {code93Mode ? 'Code 93专用模式 • 点击聚焦 • 双击放大 • 小码用+按钮放大' : '兼容所有条码 • 点击聚焦 • 双击放大 • 小码用+按钮放大'}
             </span>
           </div>
         </div>
