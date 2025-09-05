@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 import { DecodeHintType, BarcodeFormat } from '@zxing/library';
-import { createWorker } from 'tesseract.js';
+import { createWorker, PSM, OEM } from 'tesseract.js';
 
 type Props = { onDetected: (text: string) => void; highPrecision?: boolean };
 
@@ -175,6 +175,13 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         }
       });
 
+      // 设置OCR参数以提高识别精度
+      await worker.setParameters({
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+        tessedit_pageseg_mode: PSM.SINGLE_CHAR, // 单字符模式
+        tessedit_ocr_engine_mode: OEM.LSTM_ONLY // LSTM OCR引擎
+      });
+
       // 预处理图片以提高OCR准确率
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d')!;
@@ -218,11 +225,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       });
 
       // 使用高精度OCR设置
-      const { data: { text } } = await worker.recognize(processedBlob, {
-        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-        tessedit_pageseg_mode: '8', // 单字符模式
-        tessedit_ocr_engine_mode: '1' // LSTM OCR引擎
-      });
+      const { data: { text } } = await worker.recognize(processedBlob);
       
       await worker.terminate();
       URL.revokeObjectURL(img.src);
