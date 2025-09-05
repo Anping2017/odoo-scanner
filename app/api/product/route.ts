@@ -29,6 +29,8 @@ export async function GET(req: NextRequest) {
     const session = ck.get('od_session')?.value;
     const companyId = Number(ck.get('od_company')?.value || 0) || undefined;
 
+    console.log('Product search request:', { code, base: !!base, db: !!db, session: !!session, companyId });
+
     if (!base || !db || !session) return NextResponse.json({ error: '未登录' }, { status: 401 });
     const cookieStr = `session_id=${session}`;
 
@@ -57,9 +59,12 @@ export async function GET(req: NextRequest) {
       cookieStr
     );
 
+    console.log('Product search result:', { code, result: data?.result?.length || 0 });
+
     const product = data?.result?.[0] || null;
     return NextResponse.json({ product, companyId });
   } catch (e: any) {
+    console.error('Product search error:', e);
     return NextResponse.json({ error: e?.message || '查询失败' }, { status: 500 });
   }
 }

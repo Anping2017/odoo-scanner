@@ -76,19 +76,35 @@ export default function ScanPage() {
         cache: 'no-store',
       });
       const data = await res.json().catch(() => ({}));
+      
+      if (!res.ok || data?.error) {
+        throw new Error(data?.error || `HTTP ${res.status}: ${res.statusText}`);
+      }
+      
       setLastCode(trimmed);
       const p = data?.product || null;
       setProduct(p);
+      
+      if (!p) {
+        showToast(`未找到条码 "${trimmed}" 对应的产品`, 'error');
+        return;
+      }
+      
       // 默认把盘点数量填成当前库存（可手改）
       setCounted(
         typeof p?.qty_available === 'number' ? String(p.qty_available) : ''
       );
       if (p?.id) loadHistory(p.id);
+    } catch (error: any) {
+      console.error('产品搜索失败:', error);
+      if (error.name !== 'AbortError') {
+        showToast(`搜索失败: ${error.message}`, 'error');
+      }
     } finally {
       setIsLoading(false);
       fetchLockRef.current = false;
     }
-  }, [loadHistory]);
+  }, [loadHistory, showToast]);
 
   const handleDetected = useCallback((code: string) => {
     if (!code) return;
