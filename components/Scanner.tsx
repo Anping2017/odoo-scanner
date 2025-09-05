@@ -123,58 +123,22 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     await handleZoomChange(newZoom);
   };
 
-  // 检测条码位置
-  const detectBarcodePosition = async (imageFile: File): Promise<{x: number, y: number, width: number, height: number} | null> => {
-    try {
-      // 使用ZXing检测条码位置
-      const img = new Image();
-      await new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
-        img.src = URL.createObjectURL(imageFile);
-      });
-
-      if (!readerRef.current) {
-        const hints = new Map();
-        hints.set(DecodeHintType.TRY_HARDER, true);
-        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-          BarcodeFormat.CODE_93, BarcodeFormat.CODE_128, BarcodeFormat.CODE_39,
-          BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E
-        ]);
-        readerRef.current = new BrowserMultiFormatReader(hints as any);
-      }
-
-      const result = await (readerRef.current as any).decodeFromImage(img);
-      URL.revokeObjectURL(img.src);
-      
-      if (result && result.getResultPoints) {
-        const points = result.getResultPoints();
-        if (points && points.length >= 4) {
-          // 计算条码边界框
-          const xs = points.map((p: any) => p.getX());
-          const ys = points.map((p: any) => p.getY());
-          const minX = Math.min(...xs);
-          const maxX = Math.max(...xs);
-          const minY = Math.min(...ys);
-          const maxY = Math.max(...ys);
-          
-          return {
-            x: Math.max(0, minX - 10),
-            y: Math.max(0, minY - 10),
-            width: Math.min(img.width - minX + 10, maxX - minX + 20),
-            height: Math.min(img.height - minY + 10, maxY - minY + 20)
-          };
-        }
-      }
-      
-      return null;
-    } catch (error) {
-      console.log('条码位置检测失败:', error);
-      return null;
+  // 验证条码代码格式（首位字母+数字组合，最少7位）
+  const validateBarcodeCode = (text: string): string | null => {
+    // 清理文本，只保留字母和数字
+    const cleaned = text.replace(/[^A-Za-z0-9]/g, '');
+    
+    // 检查格式：首位字母+数字组合，最少7位
+    const barcodePattern = /^[A-Za-z][A-Za-z0-9]{6,}$/;
+    
+    if (barcodePattern.test(cleaned)) {
+      return cleaned.toUpperCase(); // 转换为大写
     }
+    
+    return null;
   };
 
-  // OCR文字识别功能 - 只识别条码下方的文字
+  // OCR文字识别功能 - 专门识别条码代码
   const performOCR = async (imageFile: File): Promise<string> => {
     try {
       setIsOcrProcessing(true);
@@ -198,43 +162,20 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         img.src = URL.createObjectURL(imageFile);
       });
 
-      // 尝试检测条码位置
-      const barcodePos = await detectBarcodePosition(imageFile);
+      // 使用整个图片进行OCR识别
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
       
-      if (barcodePos) {
-        // 如果检测到条码，只处理条码下方的区域
-        const cropHeight = Math.min(100, img.height - barcodePos.y - barcodePos.height); // 条码下方100像素
-        const cropY = barcodePos.y + barcodePos.height;
-        
-        if (cropHeight > 20) { // 确保有足够的区域进行OCR
-          canvas.width = img.width;
-          canvas.height = cropHeight;
-          ctx.drawImage(img, 0, cropY, img.width, cropHeight, 0, 0, img.width, cropHeight);
-          console.log(`裁剪条码下方区域: y=${cropY}, height=${cropHeight}`);
-        } else {
-          // 如果条码下方区域太小，使用整个图片的下半部分
-          canvas.width = img.width;
-          canvas.height = img.height / 2;
-          ctx.drawImage(img, 0, img.height / 2, img.width, img.height / 2, 0, 0, img.width, img.height / 2);
-          console.log('使用图片下半部分进行OCR');
-        }
-      } else {
-        // 如果没检测到条码，使用整个图片的下半部分
-        canvas.width = img.width;
-        canvas.height = img.height / 2;
-        ctx.drawImage(img, 0, img.height / 2, img.width, img.height / 2, 0, 0, img.width, img.height / 2);
-        console.log('未检测到条码，使用图片下半部分进行OCR');
-      }
-      
-      // 增强对比度
+      // 增强对比度和锐化
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imageData.data;
       
       for (let i = 0; i < data.length; i += 4) {
         // 增强对比度
-        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * 1.5 + 128));     // R
-        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * 1.5 + 128)); // G
-        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * 1.5 + 128)); // B
+        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * 2.0 + 128));     // R
+        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * 2.0 + 128)); // G
+        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * 2.0 + 128)); // B
       }
       
       ctx.putImageData(imageData, 0, 0);
@@ -249,13 +190,18 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       await worker.terminate();
       URL.revokeObjectURL(img.src);
       
-      // 清理识别结果
-      const cleanedText = text
-        .replace(/\s+/g, ' ') // 合并多个空格
-        .replace(/[^\w\s]/g, '') // 移除特殊字符
-        .trim();
+      console.log('OCR原始识别结果:', text);
       
-      return cleanedText;
+      // 验证识别结果是否符合条码代码格式
+      const validCode = validateBarcodeCode(text);
+      
+      if (validCode) {
+        console.log('识别到有效条码代码:', validCode);
+        return validCode;
+      } else {
+        console.log('识别结果不符合条码代码格式');
+        return '';
+      }
     } catch (error) {
       console.error('OCR识别失败:', error);
       return '';
@@ -597,7 +543,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         onDetected(ocrText);
         console.log('OCR识别成功:', ocrText);
       } else {
-        alert('未识别到条码或条码下方文字，请选择更清晰的照片重试。');
+        alert('未识别到条码或条码代码，请选择更清晰的照片重试。\n条码代码格式：首位字母+数字组合，最少7位');
       }
     } catch (e: any) {
       console.error('图片识别失败:', e);
@@ -628,7 +574,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       {/* 工具条 */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '8px' }}>
         <label style={{ ...btnStyle, cursor: 'pointer', display: 'inline-block' }}>
-          {isOcrProcessing ? '识别条码下方文字中...' : '从相册选择(识别条码下方文字)'}
+          {isOcrProcessing ? '识别条码代码中...' : '从相册选择(识别条码代码)'}
           <input 
             type="file" 
             accept="image/*" 
@@ -803,7 +749,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           backgroundColor: '#ecfdf5',
           borderRadius: 4
         }}>
-          正在识别条码下方的文字，请稍候...
+          正在识别条码代码（首位字母+数字，最少7位），请稍候...
         </div>
       )}
     </div>
