@@ -24,10 +24,62 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
   const [code93Mode, setCode93Mode] = useState(false); // 默认兼容所有条码格式
   const [isOcrProcessing, setIsOcrProcessing] = useState(false);
   const [multiScaleMode, setMultiScaleMode] = useState(false); // 多尺度识别模式
+  const [imageQuality, setImageQuality] = useState<number>(0); // 图像质量评分
 
   const clearRaf = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = null;
+  };
+
+  // 图像后处理 - 减少噪点提高清晰度
+  const processImageForRecognition = (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) => {
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    
+    // 应用降噪和锐化滤镜
+    for (let i = 0; i < data.length; i += 4) {
+      // 计算灰度值
+      const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+      
+      // 应用高斯模糊降噪（简化版）
+      const smoothed = gray * 0.8 + (data[i] + data[i + 1] + data[i + 2]) / 3 * 0.2;
+      
+      // 应用锐化滤镜
+      const sharpened = Math.min(255, Math.max(0, smoothed * 1.5 - gray * 0.5));
+      
+      // 应用对比度增强
+      const enhanced = Math.min(255, Math.max(0, (sharpened - 128) * 1.8 + 128));
+      
+      // 应用二值化处理
+      const binary = enhanced > 140 ? 255 : 0;
+      
+      data[i] = binary;     // R
+      data[i + 1] = binary; // G
+      data[i + 2] = binary; // B
+    }
+    
+    ctx.putImageData(imageData, 0, 0);
+  };
+
+  // 图像质量检测
+  const calculateImageQuality = (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D): number => {
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    
+    let totalVariance = 0;
+    let pixelCount = 0;
+    
+    // 计算图像方差（衡量清晰度）
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+      totalVariance += Math.pow(gray - 128, 2);
+      pixelCount++;
+    }
+    
+    const variance = totalVariance / pixelCount;
+    const quality = Math.min(100, Math.max(0, (variance / 1000) * 100)); // 转换为0-100评分
+    
+    return Math.round(quality);
   };
 
   // 设置自动聚焦功能
@@ -284,17 +336,29 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     const constraints: MediaStreamConstraints = {
       video: {
         facingMode: { ideal: 'environment' },
-        width:  { ideal: highPrecision ? 2560 : 1920 }, // 进一步提高分辨率
-        height: { ideal: highPrecision ? 1440 : 1080 }, // 进一步提高分辨率
-        frameRate: { ideal: 30 }, // 提高帧率
+        width:  { ideal: highPrecision ? 3840 : 2560 }, // 进一步提升到4K分辨率
+        height: { ideal: highPrecision ? 2160 : 1440 }, // 进一步提升到4K分辨率
+        frameRate: { ideal: 60 }, // 提高帧率到60fps
         // 添加自动聚焦支持
         focusMode: { ideal: 'continuous' },
-        focusDistance: { ideal: 0.1 }, // 近距离聚焦，适合扫码
+        focusDistance: { ideal: 0.05 }, // 更近距离聚焦
         // 添加缩放支持
         zoom: { ideal: 1 },
         // 添加曝光控制
         exposureMode: { ideal: 'continuous' },
         whiteBalanceMode: { ideal: 'continuous' },
+        // 添加图像稳定
+        imageStabilization: { ideal: true },
+        // 添加降噪
+        noiseReduction: { ideal: true },
+        // 添加对比度增强
+        contrast: { ideal: 1.2 },
+        // 添加锐化
+        sharpness: { ideal: 1.5 },
+        // 添加饱和度
+        saturation: { ideal: 1.1 },
+        // 添加亮度
+        brightness: { ideal: 0.1 },
       } as any,
       audio: false
     };
@@ -332,6 +396,13 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       canvas.width = roiW; 
       canvas.height = roiH;
       ctx.drawImage(video, sx, sy, roiW, roiH, 0, 0, roiW, roiH);
+
+      // 应用图像后处理提高识别精度
+      processImageForRecognition(canvas, ctx);
+
+      // 检测图像质量
+      const quality = calculateImageQuality(canvas, ctx);
+      setImageQuality(quality);
 
       try {
         const codes = await detector.detect(canvas);
@@ -397,30 +468,54 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
 
     const size = highPrecision
       ? { 
-          width: { ideal: 2560 }, 
-          height: { ideal: 1440 },
-          frameRate: { ideal: 30 },
+          width: { ideal: 3840 }, 
+          height: { ideal: 2160 },
+          frameRate: { ideal: 60 },
           // 添加自动聚焦支持
           focusMode: { ideal: 'continuous' },
-          focusDistance: { ideal: 0.1 },
+          focusDistance: { ideal: 0.05 },
           // 添加缩放支持
           zoom: { ideal: 1 },
           // 添加曝光控制
           exposureMode: { ideal: 'continuous' },
           whiteBalanceMode: { ideal: 'continuous' },
+          // 添加图像稳定
+          imageStabilization: { ideal: true },
+          // 添加降噪
+          noiseReduction: { ideal: true },
+          // 添加对比度增强
+          contrast: { ideal: 1.2 },
+          // 添加锐化
+          sharpness: { ideal: 1.5 },
+          // 添加饱和度
+          saturation: { ideal: 1.1 },
+          // 添加亮度
+          brightness: { ideal: 0.1 },
         } as any
       : { 
-          width: { ideal: 1920 }, 
-          height: { ideal: 1080 },
-          frameRate: { ideal: 30 },
+          width: { ideal: 2560 }, 
+          height: { ideal: 1440 },
+          frameRate: { ideal: 60 },
           // 添加自动聚焦支持
           focusMode: { ideal: 'continuous' },
-          focusDistance: { ideal: 0.1 },
+          focusDistance: { ideal: 0.05 },
           // 添加缩放支持
           zoom: { ideal: 1 },
           // 添加曝光控制
           exposureMode: { ideal: 'continuous' },
           whiteBalanceMode: { ideal: 'continuous' },
+          // 添加图像稳定
+          imageStabilization: { ideal: true },
+          // 添加降噪
+          noiseReduction: { ideal: true },
+          // 添加对比度增强
+          contrast: { ideal: 1.2 },
+          // 添加锐化
+          sharpness: { ideal: 1.5 },
+          // 添加饱和度
+          saturation: { ideal: 1.1 },
+          // 添加亮度
+          brightness: { ideal: 0.1 },
         } as any;
 
     const video = videoRef.current!;
@@ -822,6 +917,19 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           borderRadius: 4
         }}>
           正在识别条码代码（首位字母+数字/字母，最多12位），请稍候...
+        </div>
+      )}
+      
+      {imageQuality > 0 && (
+        <div style={{ 
+          color: imageQuality > 70 ? '#10b981' : imageQuality > 40 ? '#f59e0b' : '#ef4444',
+          fontSize: 12, 
+          padding: '4px 8px',
+          textAlign: 'center',
+          backgroundColor: imageQuality > 70 ? '#ecfdf5' : imageQuality > 40 ? '#fffbeb' : '#fef2f2',
+          borderRadius: 4
+        }}>
+          图像质量: {imageQuality}% {imageQuality > 70 ? '(优秀)' : imageQuality > 40 ? '(良好)' : '(需改善)'}
         </div>
       )}
     </div>
