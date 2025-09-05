@@ -147,22 +147,22 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     }
   };
 
-  // 验证条码代码格式（首位字母+数字组合，最少7位）
+  // 验证条码代码格式（首位字母+数字/字母组合，最多12位）
   const validateBarcodeCode = (text: string): string | null => {
     // 清理文本，只保留字母和数字
     const cleaned = text.replace(/[^A-Za-z0-9]/g, '');
     
-    // 检查格式：首位字母+数字组合，最少7位
-    const barcodePattern = /^[A-Za-z][A-Za-z0-9]{6,}$/;
+    // 检查格式：首位字母+数字/字母组合，最多12位
+    const barcodePattern = /^[A-Za-z][A-Za-z0-9]{0,11}$/;
     
-    if (barcodePattern.test(cleaned)) {
+    if (barcodePattern.test(cleaned) && cleaned.length >= 2) {
       return cleaned.toUpperCase(); // 转换为大写
     }
     
     return null;
   };
 
-  // OCR文字识别功能 - 专门识别条码代码
+  // OCR文字识别功能 - 专门识别条码代码（高精度版本）
   const performOCR = async (imageFile: File): Promise<string> => {
     try {
       setIsOcrProcessing(true);
@@ -191,15 +191,23 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       canvas.height = img.height;
       ctx.drawImage(img, 0, 0);
       
-      // 增强对比度和锐化
+      // 增强对比度、锐化和二值化处理
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imageData.data;
       
       for (let i = 0; i < data.length; i += 4) {
+        // 计算灰度值
+        const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+        
         // 增强对比度
-        data[i] = Math.min(255, Math.max(0, (data[i] - 128) * 2.0 + 128));     // R
-        data[i + 1] = Math.min(255, Math.max(0, (data[i + 1] - 128) * 2.0 + 128)); // G
-        data[i + 2] = Math.min(255, Math.max(0, (data[i + 2] - 128) * 2.0 + 128)); // B
+        const enhanced = Math.min(255, Math.max(0, (gray - 128) * 2.5 + 128));
+        
+        // 二值化处理（阈值128）
+        const binary = enhanced > 128 ? 255 : 0;
+        
+        data[i] = binary;     // R
+        data[i + 1] = binary; // G
+        data[i + 2] = binary; // B
       }
       
       ctx.putImageData(imageData, 0, 0);
@@ -209,7 +217,12 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         canvas.toBlob((blob) => resolve(blob!), 'image/png');
       });
 
-      const { data: { text } } = await worker.recognize(processedBlob);
+      // 使用高精度OCR设置
+      const { data: { text } } = await worker.recognize(processedBlob, {
+        tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
+        tessedit_pageseg_mode: '8', // 单字符模式
+        tessedit_ocr_engine_mode: '1' // LSTM OCR引擎
+      });
       
       await worker.terminate();
       URL.revokeObjectURL(img.src);
@@ -567,7 +580,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         onDetected(ocrText);
         console.log('OCR识别成功:', ocrText);
       } else {
-        alert('未识别到条码或条码代码，请选择更清晰的照片重试。\n条码代码格式：首位字母+数字组合，最少7位');
+        alert('未识别到条码或条码代码，请选择更清晰的照片重试。\n条码代码格式：首位字母+数字/字母组合，最多12位');
       }
     } catch (e: any) {
       console.error('图片识别失败:', e);
@@ -773,7 +786,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           backgroundColor: '#ecfdf5',
           borderRadius: 4
         }}>
-          正在识别条码代码（首位字母+数字，最少7位），请稍候...
+          正在识别条码代码（首位字母+数字/字母，最多12位），请稍候...
         </div>
       )}
     </div>
