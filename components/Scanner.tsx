@@ -18,10 +18,66 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
 
   const [err, setErr] = useState('');
   const [debugInfo, setDebugInfo] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
 
   const clearRaf = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = null;
+  };
+
+  // 设置自动聚焦功能
+  const setupAutoFocus = async (video: HTMLVideoElement, stream: MediaStream, formats?: string[]) => {
+    try {
+      const track = stream.getVideoTracks()[0];
+      if (!track) return;
+
+      const capabilities = track.getCapabilities();
+      const settings = track.getSettings();
+      
+      // 检查是否支持聚焦控制
+      if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+        await track.applyConstraints({
+          focusMode: 'continuous',
+          focusDistance: 0.1
+        });
+        setIsFocused(true);
+        setDebugInfo(`自动聚焦已启用 - 原生检测器支持格式: ${formats?.join(', ') || '未知'}`);
+      } else {
+        setDebugInfo(`自动聚焦不支持 - 使用ZXing库进行识别`);
+      }
+    } catch (e) {
+      console.warn('设置自动聚焦失败:', e);
+      setDebugInfo(`自动聚焦失败 - 使用ZXing库进行识别`);
+    }
+  };
+
+  // 触摸聚焦功能
+  const handleVideoClick = async (e: React.MouseEvent<HTMLVideoElement>) => {
+    if (!videoRef.current) return;
+    
+    const video = videoRef.current;
+    const rect = video.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    
+    try {
+      const stream = video.srcObject as MediaStream;
+      const track = stream?.getVideoTracks()[0];
+      
+      if (track && track.getCapabilities().focusMode?.includes('manual')) {
+        await track.applyConstraints({
+          focusMode: 'manual',
+          focusDistance: 0.1,
+          pointsOfInterest: [{ x, y }]
+        });
+        
+        // 显示聚焦指示
+        setIsFocused(true);
+        setTimeout(() => setIsFocused(false), 1000);
+      }
+    } catch (e) {
+      console.warn('触摸聚焦失败:', e);
+    }
   };
 
   const stop = useCallback(() => {
@@ -54,6 +110,9 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         facingMode: { ideal: 'environment' },
         width:  { ideal: highPrecision ? 1280 : 720 },
         height: { ideal: highPrecision ? 720 : 480 },
+        // 添加自动聚焦支持
+        focusMode: { ideal: 'continuous' },
+        focusDistance: { ideal: 0.1 }, // 近距离聚焦，适合扫码
       },
       audio: false
     };
@@ -61,6 +120,9 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     const video = videoRef.current!;
     video.srcObject = stream;
     await video.play();
+
+    // 设置自动聚焦
+    await setupAutoFocus(video, stream, formats);
 
     if (!canvasRef.current) {
       const c = document.createElement('canvas'); 
@@ -133,8 +195,20 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     setDebugInfo('使用ZXing库进行识别');
 
     const size = highPrecision
-      ? { width: { ideal: 1280 }, height: { ideal: 720 } }
-      : { width: { ideal: 720 }, height: { ideal: 480 } };
+      ? { 
+          width: { ideal: 1280 }, 
+          height: { ideal: 720 },
+          // 添加自动聚焦支持
+          focusMode: { ideal: 'continuous' },
+          focusDistance: { ideal: 0.1 }
+        }
+      : { 
+          width: { ideal: 720 }, 
+          height: { ideal: 480 },
+          // 添加自动聚焦支持
+          focusMode: { ideal: 'continuous' },
+          focusDistance: { ideal: 0.1 }
+        };
 
     const video = videoRef.current!;
     const controls = await readerRef.current.decodeFromConstraints(
@@ -353,6 +427,13 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <style jsx>{`
+        @keyframes pulse {
+          0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+          50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.7; }
+          100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+      `}</style>
       {/* 工具条 */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '8px' }}>
         <button style={btnStyle} onClick={snapAndDetect}>
@@ -367,15 +448,6 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
             onChange={onPickFile} 
           />
         </label>
-        <button 
-          style={btnStyle} 
-          onClick={() => {
-            const code = prompt('手动输入条码进行测试:');
-            if (code) onDetected(code);
-          }}
-        >
-          手动输入测试
-        </button>
       </div>
 
       {/* 视频区域 */}
@@ -392,14 +464,61 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           muted
           playsInline
           autoPlay
+          onClick={handleVideoClick}
           style={{ 
             position: 'absolute', 
             inset: 0, 
             width: '100%', 
             height: '100%', 
-            objectFit: 'cover' 
+            objectFit: 'cover',
+            cursor: 'pointer'
           }}
         />
+        
+        {/* 聚焦指示器 */}
+        {isFocused && (
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: 60,
+            height: 60,
+            border: '3px solid #10b981',
+            borderRadius: '50%',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            pointerEvents: 'none',
+            animation: 'pulse 1s ease-in-out'
+          }} />
+        )}
+        
+        {/* 扫码框指示器 */}
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '80%',
+          height: '45%',
+          border: '2px dashed rgba(255, 255, 255, 0.6)',
+          borderRadius: 12,
+          pointerEvents: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <div style={{
+            color: 'rgba(255, 255, 255, 0.8)',
+            fontSize: 14,
+            fontWeight: 600,
+            textAlign: 'center',
+            backgroundColor: 'rgba(0, 0, 0, 0.3)',
+            padding: '4px 8px',
+            borderRadius: 4
+          }}>
+            将条码对准此区域
+          </div>
+        </div>
       </div>
 
       {err && (
