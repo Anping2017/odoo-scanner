@@ -3,6 +3,9 @@ import { cookies, headers } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { resolvePreset } from '@/lib/odooPresets';
 
+// 强制动态渲染，因为使用了 searchParams
+export const dynamic = 'force-dynamic';
+
 // 通用 RPC 封装
 async function rpc(url: string, path: string, body: any, cookie: string) {
   const res = await fetch(`${url}${path}`, {

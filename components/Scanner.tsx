@@ -22,7 +22,6 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
   const [isZooming, setIsZooming] = useState(false);
   const [code93Mode, setCode93Mode] = useState(false); // 默认兼容所有条码格式
   const [imageQuality, setImageQuality] = useState<number>(0); // 图像质量评分
-  const [hideVideo, setHideVideo] = useState(false); // 隐藏视频区域
 
   const clearRaf = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -472,7 +471,6 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       } else {
         setErr('启动摄像头失败：' + msg);
       }
-      setHideVideo(true); // 相机错误时隐藏视频区域
     }
   }, [startNative, startZxing]);
 
@@ -587,11 +585,11 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       let code = await detectNativeOn(bmp); 
       
       if (!code) code = await detectZxingFromBlob(file);
-      if (code && !firedRef.current) {
-        firedRef.current = true;
-        stop();
-        setHideVideo(true); // 隐藏视频区域
-        onDetected(code);
+      
+      if (code && !firedRef.current) { 
+        firedRef.current = true; 
+        stop(); 
+        onDetected(code); 
       } else {
         alert('未识别到条码，请选择更清晰的照片重试。');
       }
@@ -673,31 +671,30 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       </div>
 
       {/* 视频区域 */}
-      {!hideVideo && (
-        <div style={{ 
-          position: 'relative', 
-          flex: '1 1 0', 
-          minHeight: 0, 
-          overflow: 'hidden', 
-          borderRadius: 12,
-          backgroundColor: '#000'
-        }}>
-          <video
-            ref={videoRef}
-            muted
-            playsInline
-            autoPlay
-            onClick={handleVideoClick}
-            onDoubleClick={handleVideoDoubleClick}
-            style={{ 
-              position: 'absolute', 
-              inset: 0, 
-              width: '100%', 
-              height: '100%', 
-              objectFit: 'cover',
-              cursor: 'pointer'
-            }}
-          />
+      <div style={{ 
+        position: 'relative', 
+        flex: '1 1 0', 
+        minHeight: 0, 
+        overflow: 'hidden', 
+        borderRadius: 12,
+        backgroundColor: '#000'
+      }}>
+        <video
+          ref={videoRef}
+          muted
+          playsInline
+          autoPlay
+          onClick={handleVideoClick}
+          onDoubleClick={handleVideoDoubleClick}
+          style={{ 
+            position: 'absolute', 
+            inset: 0, 
+            width: '100%', 
+            height: '100%', 
+            objectFit: 'cover',
+            cursor: 'pointer'
+          }}
+        />
         
         {/* 聚焦指示器 */}
         {isFocused && (
@@ -764,41 +761,8 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
             </span>
           </div>
         </div>
-      )}
-      
-      {/* 重新扫描按钮 */}
-      {hideVideo && (
-        <div style={{ 
-          padding: '20px', 
-          textAlign: 'center',
-          backgroundColor: '#f8f9fa',
-          borderRadius: 12,
-          margin: '10px 0'
-        }}>
-          <button
-            onClick={() => {
-              setHideVideo(false);
-              setErr('');
-              firedRef.current = false;
-              start();
-            }}
-            style={{
-              padding: '12px 24px',
-              borderRadius: 8,
-              border: 'none',
-              backgroundColor: '#3b82f6',
-              color: '#fff',
-              fontSize: 16,
-              fontWeight: 600,
-              cursor: 'pointer',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-            }}
-          >
-            🔄 重新扫描
-          </button>
-        </div>
-      )}
-      
+      </div>
+
       {err && (
         <div style={{ 
           color: '#dc2626', 
