@@ -31,15 +31,15 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       const track = stream.getVideoTracks()[0];
       if (!track) return;
 
-      const capabilities = track.getCapabilities();
-      const settings = track.getSettings();
+      const capabilities = track.getCapabilities() as any;
+      const settings = track.getSettings() as any;
       
       // 检查是否支持聚焦控制
-      if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+      if (capabilities.focusMode && Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes('continuous')) {
         await track.applyConstraints({
           focusMode: 'continuous',
           focusDistance: 0.1
-        });
+        } as any);
         setIsFocused(true);
         setDebugInfo(`自动聚焦已启用 - 原生检测器支持格式: ${formats?.join(', ') || '未知'}`);
       } else {
@@ -64,16 +64,19 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       const stream = video.srcObject as MediaStream;
       const track = stream?.getVideoTracks()[0];
       
-      if (track && track.getCapabilities().focusMode?.includes('manual')) {
-        await track.applyConstraints({
-          focusMode: 'manual',
-          focusDistance: 0.1,
-          pointsOfInterest: [{ x, y }]
-        });
-        
-        // 显示聚焦指示
-        setIsFocused(true);
-        setTimeout(() => setIsFocused(false), 1000);
+      if (track) {
+        const capabilities = track.getCapabilities() as any;
+        if (capabilities.focusMode && Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes('manual')) {
+          await track.applyConstraints({
+            focusMode: 'manual',
+            focusDistance: 0.1,
+            pointsOfInterest: [{ x, y }]
+          } as any);
+          
+          // 显示聚焦指示
+          setIsFocused(true);
+          setTimeout(() => setIsFocused(false), 1000);
+        }
       }
     } catch (e) {
       console.warn('触摸聚焦失败:', e);
@@ -113,7 +116,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         // 添加自动聚焦支持
         focusMode: { ideal: 'continuous' },
         focusDistance: { ideal: 0.1 }, // 近距离聚焦，适合扫码
-      },
+      } as any,
       audio: false
     };
     const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -201,14 +204,14 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           // 添加自动聚焦支持
           focusMode: { ideal: 'continuous' },
           focusDistance: { ideal: 0.1 }
-        }
+        } as any
       : { 
           width: { ideal: 720 }, 
           height: { ideal: 480 },
           // 添加自动聚焦支持
           focusMode: { ideal: 'continuous' },
           focusDistance: { ideal: 0.1 }
-        };
+        } as any;
 
     const video = videoRef.current!;
     const controls = await readerRef.current.decodeFromConstraints(
