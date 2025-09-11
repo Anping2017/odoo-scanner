@@ -564,7 +564,9 @@ export default function DeviceInventoryPage() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {filteredDevices.map((device) => (
+            {filteredDevices
+              .sort((a, b) => a.product_name.localeCompare(b.product_name))
+              .map((device) => (
               <div
                 key={device.id}
                 style={{
