@@ -262,7 +262,8 @@ export default function ScanPage() {
             overflow: 'hidden',
             borderRadius: 12,
             background: '#000',
-            height: '56vh',
+            height: scanning ? '56vh' : '18vh', // 扫描时56vh，暂停时18vh（约1/3）
+            transition: 'height 0.3s ease-in-out', // 添加平滑过渡动画
           }}
         >
           {scanning ? (
