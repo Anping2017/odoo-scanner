@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
       } catch (e: any) {
         results[modelName] = {
           available: false,
-          error: e?.message || 'Unknown error',
+          error: (e as any)?.message || 'Unknown error',
           fields: [],
         };
       }
