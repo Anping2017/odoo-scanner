@@ -461,7 +461,20 @@ export default function ScanPage() {
                 fontSize: 14,
               }}
             >
-              未找到产品（条码：{lastCode}）
+              <div style={{ marginBottom: 8 }}>未找到产品（条码：{lastCode}）</div>
+              <button
+                onClick={handleRescan}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  border: '1px solid #e5e7eb',
+                  background: '#fff',
+                  color: '#374151',
+                  fontWeight: 600,
+                }}
+              >
+                重新扫码
+              </button>
             </div>
           ) : null}
 
