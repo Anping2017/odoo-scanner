@@ -323,9 +323,11 @@ export default function ScanPage() {
                 ) : null}
               </div>
               <div style={{ marginTop: 6, fontSize: 14 }}>
-                门店零售价：<strong style={{ color: '#059669' }}>
-                  {typeof product.list_price === 'number' ? `¥${product.list_price.toFixed(2)}` : '-'}
-                </strong>
+                <span style={{ color: '#6b7280' }}>
+                  门店零售价：<span style={{ color: '#059669' }}>
+                    {typeof product.list_price === 'number' ? `¥${product.list_price.toFixed(2)}` : '-'}
+                  </span>
+                </span>
                 {typeof product.standard_price === 'number' ? (
                   <span style={{ marginLeft: 10, color: '#6b7280' }}>
                     成本：<span style={{ color: '#dc2626' }}>¥{product.standard_price.toFixed(2)}</span>
