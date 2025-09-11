@@ -725,6 +725,19 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         </div>
       </div>
 
+      {/* 扫码提示注释 */}
+      <div style={{
+        color: '#6b7280',
+        fontSize: 11,
+        textAlign: 'center',
+        padding: '4px 8px',
+        backgroundColor: '#f9fafb',
+        borderRadius: 4,
+        marginTop: 12
+      }}>
+        {code93Mode ? 'Code 93专用模式' : '兼容所有条码'} • 点击聚焦 • 双击3倍放大
+      </div>
+
       {err && (
         <div style={{ 
           color: '#dc2626', 

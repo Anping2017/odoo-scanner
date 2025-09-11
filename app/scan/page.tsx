@@ -149,6 +149,7 @@ export default function ScanPage() {
     setCounted('');
     setHistory([]);
     lastFetchedCodeRef.current = '';
+    setScanning(true);
   }, []);
 
   // 提交盘点：把产品在当前库位的数量调整到 counted
@@ -566,6 +567,18 @@ export default function ScanPage() {
           }}
         >
           查询
+        </button>
+        <button
+          type="button"
+          onClick={handleClear}
+          style={{
+            padding: '12px 14px',
+            borderRadius: 10,
+            border: '1px solid #e5e7eb',
+            background: '#fff',
+          }}
+        >
+          清空
         </button>
       </form>
       
