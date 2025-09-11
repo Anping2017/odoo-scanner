@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
             ['barcode', '=', code],
             ['default_code', '=', code],
           ],
-          ['id', 'name', 'barcode', 'default_code', 'qty_available', 'free_qty'],
+          ['id', 'name', 'barcode', 'default_code', 'qty_available', 'free_qty', 'list_price', 'standard_price', 'raytech_stock', 'raytech_p3'],
         ],
         kwargs: { limit: 1, context: ctx },
       },

@@ -10,6 +10,10 @@ type Product = {
   default_code?: string;
   qty_available?: number;
   free_qty?: number;
+  list_price?: number;
+  standard_price?: number;
+  raytech_stock?: number;
+  raytech_p3?: number;
 };
 
 type HistoryItem = {
@@ -48,7 +52,7 @@ export default function ScanPage() {
 
   const loadHistory = useCallback(async (pid: number) => {
     try {
-      const res = await fetch(`/api/inventory?product_id=${pid}&limit=10`, { cache: 'no-store' });
+      const res = await fetch(`/api/inventory?product_id=${pid}&limit=5`, { cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
       setHistory(Array.isArray(data?.history) ? data.history : []);
     } catch {
@@ -316,6 +320,30 @@ export default function ScanPage() {
                   <span style={{ marginLeft: 10, color: '#6b7280' }}>可用：{product.free_qty}</span>
                 ) : null}
               </div>
+              <div style={{ marginTop: 6, fontSize: 14 }}>
+                门店零售价：<strong style={{ color: '#059669' }}>
+                  {typeof product.list_price === 'number' ? `¥${product.list_price.toFixed(2)}` : '-'}
+                </strong>
+                {typeof product.standard_price === 'number' ? (
+                  <span style={{ marginLeft: 10, color: '#6b7280' }}>
+                    成本：<span style={{ color: '#dc2626' }}>¥{product.standard_price.toFixed(2)}</span>
+                  </span>
+                ) : null}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 14 }}>
+                {typeof product.raytech_p3 === 'number' ? (
+                  <span style={{ color: '#6b7280' }}>
+                    总部零售价：<span style={{ color: '#059669' }}>¥{product.raytech_p3.toFixed(2)}</span>
+                  </span>
+                ) : null}
+                {typeof product.raytech_stock === 'number' ? (
+                  <span style={{ marginLeft: 10, color: '#6b7280' }}>
+                    总部库存：<span style={{ color: product.raytech_stock > 0 ? '#059669' : '#dc2626' }}>
+                      {product.raytech_stock > 0 ? '有货' : '无货'}
+                    </span>
+                  </span>
+                ) : null}
+              </div>
 
               {/* 盘点输入区 */}
               <div style={{ marginTop: 12 }}>
@@ -327,7 +355,7 @@ export default function ScanPage() {
                     marginBottom: 8,
                   }}
                 >
-                  <label style={{ fontSize: 14 }}>盘点数量（调整到）：</label>
+                  <label style={{ fontSize: 14 }}>盘点数量：</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <button
                       onClick={() => {
@@ -442,7 +470,7 @@ export default function ScanPage() {
             <div
               style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14 }}
             >
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>最近库存调整记录</div>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>最近库存变动记录</div>
               {history.length ? (
                 <div style={{ display: 'grid', gap: 8 }}>
                   {history.map((h) => (
