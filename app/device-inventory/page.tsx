@@ -781,8 +781,7 @@ export default function DeviceInventoryPage() {
               marginBottom: 24,
               lineHeight: 1.5,
             }}>
-              确定要结束当前盘点吗？<br/>
-              已盘点的设备将保持选中状态。
+              确定要结束当前盘点吗？
             </div>
             
             {/* 按钮 */}
