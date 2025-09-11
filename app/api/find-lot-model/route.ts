@@ -85,10 +85,10 @@ export async function GET(req: NextRequest) {
           results[modelName].searchResult = searchResult?.result || [];
           results[modelName].searchError = searchResult?.error || null;
         }
-      } catch (e) {
+      } catch (e: any) {
         results[modelName] = {
           available: false,
-          error: e.message,
+          error: e?.message || 'Unknown error',
           fields: [],
         };
       }
