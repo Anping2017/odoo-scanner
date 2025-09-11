@@ -106,6 +106,40 @@ export default function DeviceInventoryPage() {
     loadDevices();
   }, [loadDevices]);
 
+  // 记录操作历史
+  const recordOperation = useCallback((type: 'scan' | 'manual', action: 'add' | 'remove', deviceId: number, deviceName: string) => {
+    const operationId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const operation = {
+      id: operationId,
+      type,
+      action,
+      deviceId,
+      deviceName,
+      timestamp: Date.now(),
+    };
+    
+    setOperationHistory(prev => [operation, ...prev.slice(0, 9)]); // 保留最近10条记录
+    
+    // 显示提示
+    const actionText = action === 'add' ? '已盘点' : '已移除';
+    const typeText = type === 'scan' ? '扫码' : '手动';
+    setToast({
+      show: true,
+      message: `${typeText}${actionText}: ${deviceName}`,
+      canUndo: true,
+      operationId,
+    });
+  }, [devices]);
+
+  // 显示消息提示（不支持撤销）
+  const showMessage = useCallback((message: string) => {
+    setToast({
+      show: true,
+      message,
+      canUndo: false,
+    });
+  }, []);
+
   // 扫码处理
   const handleDetected = useCallback((code: string) => {
     if (!isInventoryMode) return;
@@ -137,14 +171,10 @@ export default function DeviceInventoryPage() {
         setScanResult(prev => ({ ...prev, show: false }));
       }, 1500);
     } else {
-      // 显示未找到设备的提示
-      setScanResult({
-        show: true,
-        code,
-        found: false,
-      });
+      // 在操作提示框中显示未找到设备的消息
+      showMessage(`扫码未找到设备: ${code}`);
     }
-  }, [isInventoryMode, devices]);
+  }, [isInventoryMode, devices, showMessage]);
 
   // 处理扫码提示框按钮
   const handleScanResultAction = useCallback(() => {
@@ -156,31 +186,6 @@ export default function DeviceInventoryPage() {
       setScanResult({ show: false, code: '', found: false });
     }
   }, [scanResult]);
-
-  // 记录操作历史
-  const recordOperation = useCallback((type: 'scan' | 'manual', action: 'add' | 'remove', deviceId: number, deviceName: string) => {
-    const operationId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    const operation = {
-      id: operationId,
-      type,
-      action,
-      deviceId,
-      deviceName,
-      timestamp: Date.now(),
-    };
-    
-    setOperationHistory(prev => [operation, ...prev.slice(0, 9)]); // 保留最近10条记录
-    
-    // 显示提示
-    const actionText = action === 'add' ? '已盘点' : '已移除';
-    const typeText = type === 'scan' ? '扫码' : '手动';
-    setToast({
-      show: true,
-      message: `${typeText}${actionText}: ${deviceName}`,
-      canUndo: true,
-      operationId,
-    });
-  }, [devices]);
 
   // 撤销操作
   const undoOperation = useCallback((operationId: string) => {
@@ -364,23 +369,6 @@ export default function DeviceInventoryPage() {
         </div>
       </div>
 
-      {/* 搜索框 */}
-      <div style={{ padding: '16px' }}>
-        <input
-          type="text"
-          placeholder="搜索产品名称、编码或Lot/Serial号..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          style={{
-            width: '100%',
-            padding: '12px 16px',
-            borderRadius: 8,
-            border: '1px solid #e5e7eb',
-            fontSize: 14,
-            outline: 'none',
-          }}
-        />
-      </div>
 
       {/* 摄像头区域 - 只在盘点模式下显示 */}
       {isInventoryMode && (
@@ -477,8 +465,58 @@ export default function DeviceInventoryPage() {
         </div>
       )}
 
-      {/* 统计信息 */}
+      {/* 搜索区域和统计信息 */}
       <div style={{ padding: '0 16px 16px' }}>
+        {/* 手动搜索 */}
+        <div style={{ 
+          display: 'flex',
+          gap: 12,
+          alignItems: 'center',
+          marginBottom: 12,
+        }}>
+          <div style={{
+            fontSize: 14,
+            fontWeight: 500,
+            color: '#374151',
+            whiteSpace: 'nowrap',
+          }}>
+            手动搜索
+          </div>
+          <input
+            type="text"
+            placeholder="搜索产品名称、编码或Lot/Serial号..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              flex: 1,
+              padding: '10px 12px',
+              borderRadius: 6,
+              border: '1px solid #e5e7eb',
+              fontSize: 14,
+              outline: 'none',
+            }}
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              style={{
+                padding: '10px 12px',
+                borderRadius: 6,
+                border: '1px solid #e5e7eb',
+                background: '#fff',
+                color: '#6b7280',
+                fontSize: 14,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              清空
+            </button>
+          )}
+        </div>
+        
+        {/* 统计信息 */}
         <div style={{ 
           display: 'flex', 
           justifyContent: 'space-between',
