@@ -41,6 +41,7 @@ export default function ScanPage() {
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
   const [showImageModal, setShowImageModal] = useState(false);
   const [highResImage, setHighResImage] = useState<string | null>(null);
+  const updateLockRef = useRef(false);
 
   const fetchLockRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -179,6 +180,8 @@ export default function ScanPage() {
       showToast('请输入正确的数量', 'error');
       return;
     }
+    if (updateLockRef.current) return; // 防止重复提交
+    updateLockRef.current = true;
     setUpdating(true);
     try {
       const res = await fetch('/api/inventory', {
@@ -192,36 +195,24 @@ export default function ScanPage() {
         throw new Error(data?.error || '更新失败');
       }
       
-      // 成功后：强制刷新产品与历史数据
-      // 清空缓存引用，确保重新获取最新数据
-      lastFetchedCodeRef.current = '';
-      
-      // 直接调用API获取最新产品信息，绕过缓存
-      if (lastCode) {
-        try {
-          const productRes = await fetch(`/api/product?code=${encodeURIComponent(lastCode)}`, {
-            cache: 'no-store',
-          });
-          const productData = await productRes.json().catch(() => ({}));
-          const updatedProduct = productData?.product || null;
-          
-          setProduct(updatedProduct);
-          // 更新盘点数量为新的库存数量
-          setCounted(
-            typeof updatedProduct?.qty_available === 'number' ? String(updatedProduct.qty_available) : counted
-          );
-        } catch (e) {
-          console.warn('刷新产品信息失败:', e);
-        }
+      // 成功后：优化更新策略
+      // 直接更新本地状态，减少API调用
+      if (product) {
+        const updatedProduct = { ...product, qty_available: qty };
+        setProduct(updatedProduct);
+        setCounted(String(qty));
       }
       
-      // 重新加载历史记录
-      if (product.id) await loadHistory(product.id);
+      // 异步重新加载历史记录（不阻塞UI）
+      if (product.id) {
+        loadHistory(product.id).catch(e => console.warn('刷新历史记录失败:', e));
+      }
       showToast('库存已更新（Odoo 中已记录库存调整历史）', 'success');
     } catch (e: any) {
       showToast(e?.message || '库存更新失败', 'error');
     } finally {
       setUpdating(false);
+      updateLockRef.current = false; // 重置锁
     }
   }, [product?.id, counted, lastCode, loadHistory]);
 

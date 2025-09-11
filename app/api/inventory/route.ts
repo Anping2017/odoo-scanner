@@ -6,16 +6,29 @@ import { resolvePreset } from '@/lib/odooPresets';
 // 强制动态渲染，因为使用了 searchParams
 export const dynamic = 'force-dynamic';
 
-// 通用 RPC 封装
-async function rpc(url: string, path: string, body: any, cookie: string) {
-  const res = await fetch(`${url}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', cookie },
-    body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method: 'call', params: body }),
-    cache: 'no-store',
-  });
-  const data = await res.json().catch(() => ({}));
-  return data;
+// 通用 RPC 封装（添加超时和重试）
+async function rpc(url: string, path: string, body: any, cookie: string, retries = 2) {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
+      
+      const res = await fetch(`${url}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie },
+        body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method: 'call', params: body }),
+        cache: 'no-store',
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      const data = await res.json().catch(() => ({}));
+      return data;
+    } catch (error) {
+      if (i === retries) throw error;
+      await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // 递增延迟重试
+    }
+  }
 }
 
 // 如果传入的是 view 类型库位，向下找一个 internal 子库位
@@ -97,14 +110,14 @@ export async function GET(req: NextRequest) {
     const context: any = {};
     if (companyId) { context.company_id = companyId; context.allowed_company_ids = [companyId]; }
 
-    // 用 stock.move 读近几条完成的移动作为历史
+    // 用 stock.move 读近几条完成的移动作为历史（优化查询）
     const moveIds = await rpc(base, '/web/dataset/call_kw', {
       model: 'stock.move',
-      method: 'search',
+      method: 'search_read', // 使用 search_read 减少一次 API 调用
       args: [[
         ['product_id', '=', pid],
         ['state', '=', 'done'],
-      ]],
+      ], ['id', 'date', 'product_uom_qty', 'product_uom', 'location_id', 'location_dest_id', 'reference', 'create_uid', 'write_uid']],
       kwargs: { limit, order: 'date desc', context },
     }, cookieStr);
 
@@ -112,14 +125,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ history: [] });
     }
 
-    const moves = await rpc(base, '/web/dataset/call_kw', {
-      model: 'stock.move',
-      method: 'read',
-      args: [moveIds.result, ['id', 'date', 'product_uom_qty', 'product_uom', 'location_id', 'location_dest_id', 'reference', 'create_uid', 'write_uid']],
-      kwargs: { context },
-    }, cookieStr);
-
-    const out = (moves?.result || []).map((m: any) => ({
+    const out = (moveIds.result || []).map((m: any) => ({
       id: m.id,
       date: m.date,
       qty_done: m.product_uom_qty,
