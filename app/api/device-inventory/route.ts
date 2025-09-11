@@ -131,7 +131,7 @@ export async function GET(req: NextRequest) {
 
     // 组合数据 - 使用stock.quant数据 + Lot详细信息
     const deviceInventory = quants.map((quant: any) => {
-      const product = productMap.get(quant.product_id[0]);
+      const product: any = productMap.get(quant.product_id[0]);
       const lot: any = lotMap.get(quant.lot_id[0]);
       
       // 使用Lot的name作为序列号
