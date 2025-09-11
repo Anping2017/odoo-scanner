@@ -144,10 +144,8 @@ export default function DeviceInventoryPage() {
   const handleDetected = useCallback((code: string) => {
     if (!isInventoryMode) return;
     
-    // 查找匹配的设备
+    // 查找匹配的设备 - 只根据Lot/Serial Number匹配
     const matchedDevice = devices.find(device => 
-      device.scan_key === code || 
-      device.product_barcode === code ||
       device.lot_name === code
     );
     
@@ -406,26 +404,49 @@ export default function DeviceInventoryPage() {
           }}>
             {scanning ? '扫码选择设备' : '点击重新扫码'}
           </div>
+          
+          {/* 重新扫码按钮 */}
+          <div style={{
+            marginTop: 12,
+            textAlign: 'center',
+          }}>
+            <button
+              onClick={() => setScanning(true)}
+              style={{
+                padding: '10px 20px',
+                borderRadius: 8,
+                border: '1px solid #059669',
+                background: '#fff',
+                color: '#059669',
+                fontSize: 14,
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              重新扫码
+            </button>
+          </div>
         </div>
       )}
 
       {/* 搜索区域和统计信息 */}
       <div style={{ padding: '0 16px 16px', marginTop: 24 }}>
         {/* 手动搜索 */}
+        <div style={{
+          fontSize: 14,
+          fontWeight: 500,
+          color: '#374151',
+          marginBottom: 8,
+        }}>
+          手动搜索
+        </div>
         <div style={{ 
           display: 'flex',
           gap: 12,
           alignItems: 'center',
           marginBottom: 12,
         }}>
-          <div style={{
-            fontSize: 14,
-            fontWeight: 500,
-            color: '#374151',
-            whiteSpace: 'nowrap',
-          }}>
-            手动搜索
-          </div>
           <input
             type="text"
             placeholder="搜索产品名称、编码或Lot/Serial号..."
