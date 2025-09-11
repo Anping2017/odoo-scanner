@@ -65,6 +65,9 @@ export default function DeviceInventoryPage() {
     canUndo: false,
   });
 
+  // 扫码完成状态
+  const [scanCompleted, setScanCompleted] = useState(false);
+
   // 加载设备列表
   const loadDevices = useCallback(async () => {
     try {
@@ -167,10 +170,14 @@ export default function DeviceInventoryPage() {
         recordOperation('scan', 'add', matchedDevice.id, matchedDevice.product_name);
         // 隐藏提示框
         setScanResult(prev => ({ ...prev, show: false }));
+        // 设置扫码完成状态
+        setScanCompleted(true);
       }, 1500);
     } else {
       // 在操作提示框中显示未找到设备的消息
       showMessage(`扫码未找到设备: ${code}`);
+      // 设置扫码完成状态
+      setScanCompleted(true);
     }
   }, [isInventoryMode, devices, showMessage]);
 
@@ -405,28 +412,33 @@ export default function DeviceInventoryPage() {
             {scanning ? '扫码选择设备' : '点击重新扫码'}
           </div>
           
-          {/* 重新扫码按钮 */}
-          <div style={{
-            marginTop: 12,
-            textAlign: 'center',
-          }}>
-            <button
-              onClick={() => setScanning(true)}
-              style={{
-                padding: '10px 20px',
-                borderRadius: 8,
-                border: '1px solid #059669',
-                background: '#fff',
-                color: '#059669',
-                fontSize: 14,
-                fontWeight: 500,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-              }}
-            >
-              重新扫码
-            </button>
-          </div>
+          {/* 重新扫码按钮 - 条件显示 */}
+          {scanCompleted && (
+            <div style={{
+              marginTop: 12,
+              textAlign: 'center',
+            }}>
+              <button
+                onClick={() => {
+                  setScanning(true);
+                  setScanCompleted(false);
+                }}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: 8,
+                  border: '1px solid #059669',
+                  background: '#fff',
+                  color: '#059669',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                重新扫码
+              </button>
+            </div>
+          )}
         </div>
       )}
 
