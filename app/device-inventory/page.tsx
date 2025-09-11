@@ -241,6 +241,7 @@ export default function DeviceInventoryPage() {
     setScanning(true);
     setSelectedDevices(new Set());
     setFilteredDevices(devices);
+    setScanCompleted(false); // 重置扫码完成状态
   }, [devices]);
 
   // 结束盘点
@@ -422,6 +423,8 @@ export default function DeviceInventoryPage() {
                 onClick={() => {
                   setScanning(true);
                   setScanCompleted(false);
+                  // 重置扫码结果状态
+                  setScanResult({ show: false, code: '', found: false });
                 }}
                 style={{
                   padding: '10px 20px',
