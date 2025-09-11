@@ -18,7 +18,7 @@ export function middleware(req: NextRequest) {
     }
   }
 
-  if (pathname.startsWith('/scan')) {
+  if (pathname.startsWith('/scan') || pathname.startsWith('/device-inventory')) {
     if (!authed) {
       const url = req.nextUrl.clone();
       url.pathname = '/';
@@ -30,5 +30,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/scan'],
+  matcher: ['/', '/scan', '/device-inventory'],
 };

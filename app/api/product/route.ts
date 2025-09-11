@@ -33,9 +33,9 @@ export async function GET(req: NextRequest) {
     const session = ck.get('od_session')?.value;
     const companyId = Number(ck.get('od_company')?.value || 0) || undefined;
 
-    console.log('Product search request:', { code, base: !!base, db: !!db, session: !!session, companyId });
-
-    if (!base || !db || !session) return NextResponse.json({ error: '未登录' }, { status: 401 });
+    if (!base || !db || !session) {
+      return NextResponse.json({ error: '未登录' }, { status: 401 });
+    }
     const cookieStr = `session_id=${session}`;
 
     const ctx: any = {};
@@ -44,6 +44,10 @@ export async function GET(req: NextRequest) {
       ctx.allowed_company_ids = [companyId]; 
     }
 
+    // 先获取基础字段
+    const baseFields = ['id', 'name', 'barcode', 'default_code', 'qty_available', 'free_qty', 'list_price', 'standard_price'];
+    const imageField = highResImage ? 'image_1920' : 'image_128';
+    
     const data = await rpc(
       base,
       '/web/dataset/call_kw',
@@ -56,21 +60,50 @@ export async function GET(req: NextRequest) {
             ['barcode', '=', code],
             ['default_code', '=', code],
           ],
-          highResImage 
-            ? ['id', 'name', 'barcode', 'default_code', 'qty_available', 'free_qty', 'list_price', 'standard_price', 'raytech_stock', 'raytech_p3', 'image_1920']
-            : ['id', 'name', 'barcode', 'default_code', 'qty_available', 'free_qty', 'list_price', 'standard_price', 'raytech_stock', 'raytech_p3', 'image_128'],
+          [...baseFields, imageField],
         ],
         kwargs: { limit: 1, context: ctx },
       },
       cookieStr
     );
 
-    console.log('Product search result:', { code, result: data?.result?.length || 0 });
-
-    const product = data?.result?.[0] || null;
+    let product = data?.result?.[0] || null;
+    
+    if (data?.error) {
+      const errorMessage = data.error.message || data.error.data?.message || JSON.stringify(data.error);
+      throw new Error(`Odoo API错误: ${errorMessage}`);
+    }
+    
+    // 如果找到产品，尝试获取自定义字段
+    if (product) {
+      try {
+        const customData = await rpc(
+          base,
+          '/web/dataset/call_kw',
+          {
+            model: 'product.product',
+            method: 'read',
+            args: [
+              [product.id],
+              ['raytech_stock', 'raytech_p3']
+            ],
+            kwargs: { context: ctx },
+          },
+          cookieStr
+        );
+        
+        // 合并自定义字段到产品数据
+        if (customData?.result?.[0]) {
+          product = { ...product, ...customData.result[0] };
+        }
+      } catch (customError) {
+        // 设置默认值，避免前端显示错误
+        product.raytech_stock = null;
+        product.raytech_p3 = null;
+      }
+    }
     return NextResponse.json({ product, companyId });
   } catch (e: any) {
-    console.error('Product search error:', e);
     return NextResponse.json({ error: e?.message || '查询失败' }, { status: 500 });
   }
 }

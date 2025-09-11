@@ -172,6 +172,7 @@ export default function ScanPage() {
     setScanning(true);
   }, []);
 
+
   // 提交盘点：把产品在当前库位的数量调整到 counted
   const handleUpdateInventory = useCallback(async () => {
     if (!product?.id) return;
@@ -242,6 +243,20 @@ export default function ScanPage() {
       >
         <div style={{ fontWeight: 700 }}>库存扫码</div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => window.location.href = '/device-inventory'}
+            style={{ 
+              padding: '8px 12px', 
+              borderRadius: 8, 
+              border: '1px solid #e5e7eb', 
+              background: '#fff',
+              color: '#374151',
+              fontWeight: 500,
+              fontSize: 14,
+            }}
+          >
+            设备盘点
+          </button>
           <button
             onClick={handleRescan}
             style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff' }}
@@ -344,20 +359,24 @@ export default function ScanPage() {
                   </span>
                 ) : null}
               </div>
-              <div style={{ marginTop: 6, fontSize: 14 }}>
-                {typeof product.raytech_p3 === 'number' ? (
-                  <span style={{ color: '#6b7280' }}>
-                    总部零售价：<span style={{ color: '#059669' }}>¥{product.raytech_p3.toFixed(2)}</span>
-                  </span>
-                ) : null}
-                {typeof product.raytech_stock === 'number' ? (
-                  <span style={{ marginLeft: 10, color: '#6b7280' }}>
-                    总部库存：<span style={{ color: product.raytech_stock > 0 ? '#059669' : '#dc2626' }}>
-                      {product.raytech_stock > 0 ? '有货' : '无货'}
+              {/* 只在自定义字段存在时显示 */}
+              {(product.raytech_p3 !== null && product.raytech_p3 !== undefined) || 
+               (product.raytech_stock !== null && product.raytech_stock !== undefined) ? (
+                <div style={{ marginTop: 6, fontSize: 14 }}>
+                  {typeof product.raytech_p3 === 'number' ? (
+                    <span style={{ color: '#6b7280' }}>
+                      总部零售价：<span style={{ color: '#059669' }}>¥{product.raytech_p3.toFixed(2)}</span>
                     </span>
-                  </span>
-                ) : null}
-              </div>
+                  ) : null}
+                  {typeof product.raytech_stock === 'number' ? (
+                    <span style={{ marginLeft: 10, color: '#6b7280' }}>
+                      总部库存：<span style={{ color: product.raytech_stock > 0 ? '#059669' : '#dc2626' }}>
+                        {product.raytech_stock > 0 ? '有货' : '无货'}
+                      </span>
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
 
               {/* 盘点输入区 */}
               <div style={{ marginTop: 12 }}>
