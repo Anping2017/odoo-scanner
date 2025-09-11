@@ -70,6 +70,9 @@ export default function DeviceInventoryPage() {
   
   // 扫码器重新渲染键
   const [scannerKey, setScannerKey] = useState(0);
+  
+  // 结束盘点确认弹窗状态
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
 
   // 加载设备列表
   const loadDevices = useCallback(async () => {
@@ -364,7 +367,7 @@ export default function DeviceInventoryPage() {
               </button>
             ) : (
               <button
-                onClick={handleEndInventory}
+                onClick={() => setShowEndConfirm(true)}
                 style={{
                   padding: '8px 12px',
                   borderRadius: 8,
@@ -715,6 +718,115 @@ export default function DeviceInventoryPage() {
             >
               {scanResult.found ? '继续扫码' : '重新扫码'}
             </button>
+          </div>
+        </div>
+      )}
+      
+      {/* 结束盘点确认弹窗 */}
+      {showEndConfirm && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: 12,
+            padding: 24,
+            maxWidth: 400,
+            width: '90%',
+            textAlign: 'center',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          }}>
+            {/* 图标 */}
+            <div style={{
+              width: 64,
+              height: 64,
+              borderRadius: '50%',
+              background: '#fef2f2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px',
+            }}>
+              <div style={{
+                fontSize: 32,
+                color: '#dc2626',
+              }}>
+                ⚠️
+              </div>
+            </div>
+            
+            {/* 标题 */}
+            <div style={{
+              fontSize: 18,
+              fontWeight: 600,
+              marginBottom: 8,
+              color: '#374151',
+            }}>
+              确认结束盘点
+            </div>
+            
+            {/* 内容 */}
+            <div style={{
+              fontSize: 14,
+              color: '#6b7280',
+              marginBottom: 24,
+              lineHeight: 1.5,
+            }}>
+              确定要结束当前盘点吗？<br/>
+              已盘点的设备将保持选中状态。
+            </div>
+            
+            {/* 按钮 */}
+            <div style={{
+              display: 'flex',
+              gap: 12,
+              justifyContent: 'center',
+            }}>
+              <button
+                onClick={() => setShowEndConfirm(false)}
+                style={{
+                  padding: '12px 24px',
+                  borderRadius: 8,
+                  border: '1px solid #d1d5db',
+                  background: '#fff',
+                  color: '#374151',
+                  fontWeight: 500,
+                  fontSize: 14,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  handleEndInventory();
+                  setShowEndConfirm(false);
+                }}
+                style={{
+                  padding: '12px 24px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: '#dc2626',
+                  color: '#fff',
+                  fontWeight: 500,
+                  fontSize: 14,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                确认结束
+              </button>
+            </div>
           </div>
         </div>
       )}
