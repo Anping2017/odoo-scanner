@@ -67,6 +67,9 @@ export default function DeviceInventoryPage() {
 
   // 扫码完成状态
   const [scanCompleted, setScanCompleted] = useState(false);
+  
+  // 扫码器重新渲染键
+  const [scannerKey, setScannerKey] = useState(0);
 
   // 加载设备列表
   const loadDevices = useCallback(async () => {
@@ -392,7 +395,7 @@ export default function DeviceInventoryPage() {
             transition: 'height 0.3s ease',
           }}>
           {scanning ? (
-            <Scanner onDetected={handleDetected} />
+            <Scanner key={scannerKey} onDetected={handleDetected} />
           ) : (
             <div
               style={{
@@ -429,6 +432,8 @@ export default function DeviceInventoryPage() {
                   setScanCompleted(false);
                   // 重置扫码结果状态
                   setScanResult({ show: false, code: '', found: false });
+                  // 强制重新渲染扫码器
+                  setScannerKey(prev => prev + 1);
                 }}
                 style={{
                   padding: '10px 20px',
