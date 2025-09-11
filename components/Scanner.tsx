@@ -22,6 +22,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
   const [isZooming, setIsZooming] = useState(false);
   const [code93Mode, setCode93Mode] = useState(false); // 默认兼容所有条码格式
   const [imageQuality, setImageQuality] = useState<number>(0); // 图像质量评分
+  const [showScanHint, setShowScanHint] = useState(true); // 控制扫码提示显示
 
   const clearRaf = () => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -493,6 +494,15 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     return () => document.removeEventListener('visibilitychange', vis);
   }, [start]);
 
+  // 扫码提示3秒后自动消失
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowScanHint(false);
+    }, 3000);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
 
   async function detectNativeOn(source: ImageBitmap | HTMLCanvasElement): Promise<string> {
     try {
@@ -618,6 +628,10 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.7; }
           100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
         }
+        @keyframes fadeOut {
+          0% { opacity: 1; }
+          100% { opacity: 0; }
+        }
       `}</style>
       {/* 工具条 */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '8px' }}>
@@ -648,26 +662,6 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           {code93Mode ? 'Code 93专用' : '兼容所有条码'}
         </button>
         
-        {/* 缩放控制 */}
-        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          <button 
-            style={btnStyle} 
-            onClick={() => handleZoomChange(Math.max(1, zoomLevel - 0.5))}
-            disabled={zoomLevel <= 1}
-          >
-            −
-          </button>
-          <span style={{ fontSize: 12, minWidth: 40, textAlign: 'center' }}>
-            {zoomLevel.toFixed(1)}×
-          </span>
-          <button 
-            style={btnStyle} 
-            onClick={() => handleZoomChange(zoomLevel + 0.5)}
-            disabled={zoomLevel >= 3}
-          >
-            +
-          </button>
-        </div>
       </div>
 
       {/* 视频区域 */}
@@ -732,35 +726,38 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         )}
         
         {/* 扫码框指示器 */}
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          width: '80%',
-          height: '45%',
-          border: '2px dashed rgba(255, 255, 255, 0.6)',
-          borderRadius: 12,
-          pointerEvents: 'none',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
+        {showScanHint && (
           <div style={{
-            color: 'rgba(255, 255, 255, 0.8)',
-            fontSize: 12,
-            fontWeight: 600,
-            textAlign: 'center',
-            backgroundColor: 'rgba(0, 0, 0, 0.3)',
-            padding: '4px 8px',
-            borderRadius: 4
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: '80%',
+            height: '45%',
+            border: '2px dashed rgba(255, 255, 255, 0.6)',
+            borderRadius: 12,
+            pointerEvents: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            animation: 'fadeOut 0.5s ease-out 2.5s forwards'
           }}>
-            将条码对准此区域<br/>
-            <span style={{ fontSize: 10, opacity: 0.7 }}>
-              {code93Mode ? 'Code 93专用模式' : '兼容所有条码'} • 点击聚焦 • 双击3倍放大 • 小码用+按钮放大
-            </span>
+            <div style={{
+              color: 'rgba(255, 255, 255, 0.8)',
+              fontSize: 12,
+              fontWeight: 600,
+              textAlign: 'center',
+              backgroundColor: 'rgba(0, 0, 0, 0.3)',
+              padding: '4px 8px',
+              borderRadius: 4
+            }}>
+              将条码对准此区域<br/>
+              <span style={{ fontSize: 10, opacity: 0.7 }}>
+                {code93Mode ? 'Code 93专用模式' : '兼容所有条码'} • 点击聚焦 • 双击3倍放大
+              </span>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {err && (

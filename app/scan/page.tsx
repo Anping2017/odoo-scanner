@@ -567,18 +567,6 @@ export default function ScanPage() {
         >
           查询
         </button>
-        <button
-          type="button"
-          onClick={handleClear}
-          style={{
-            padding: '12px 14px',
-            borderRadius: 10,
-            border: '1px solid #e5e7eb',
-            background: '#fff',
-          }}
-        >
-          清空
-        </button>
       </form>
       
       {/* Toast通知 */}
