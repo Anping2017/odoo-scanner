@@ -255,67 +255,12 @@ export default function DeviceInventoryPage() {
   }, [devices]);
 
   // 结束盘点
-  const handleEndInventory = useCallback(async () => {
-    try {
-      // 发送通知给Odoo用户Fu
-      const notificationMessage = `设备盘点已完成。\n\n盘点统计：\n- 总设备数：${devices.length}\n- 已盘点设备：${selectedDevices.size}\n- 剩余设备：${devices.length - selectedDevices.size}\n\n盘点时间：${new Date().toLocaleString('zh-CN')}`;
-      
-      const response = await fetch('/api/send-notification', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: notificationMessage,
-          recipientLogin: 'fu'
-        }),
-      });
-
-      const result = await response.json();
-      
-      if (result.success) {
-        console.log('通知发送成功:', result);
-        // 可以显示成功提示
-        setToast({
-          show: true,
-          message: `盘点完成通知已发送给用户 ${result.recipient}`,
-          canUndo: false
-        });
-      } else {
-        console.error('通知发送失败:', result.error);
-        // 显示错误提示，但不阻止盘点结束
-        let errorMessage = `盘点完成，但通知发送失败: ${result.error}`;
-        
-        // 如果是会话过期，提供更友好的提示
-        if (result.error && result.error.includes('会话已过期')) {
-          errorMessage = '盘点完成，但通知发送失败：Odoo会话已过期，请重新登录后再试';
-        }
-        
-        setToast({
-          show: true,
-          message: errorMessage,
-          canUndo: false
-        });
-      }
-    } catch (error) {
-      console.error('发送通知时出错:', error);
-      // 显示错误提示，但不阻止盘点结束
-      setToast({
-        show: true,
-        message: '盘点完成，但通知发送失败',
-        canUndo: false
-      });
-    }
-
-    // 无论通知是否成功，都执行盘点结束操作
+  const handleEndInventory = useCallback(() => {
     setIsInventoryMode(false);
     setScanning(false);
     setSelectedDevices(new Set());
     setFilteredDevices(devices);
-    setOperationHistory([]);
-    setScanCompleted(false);
-    setScannerKey(prev => prev + 1);
-  }, [devices, selectedDevices]);
+  }, [devices]);
 
   // 重新扫码
   const handleRescan = useCallback(() => {

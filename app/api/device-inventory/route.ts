@@ -13,16 +13,6 @@ async function rpc(url: string, path: string, body: any, cookie: string) {
   });
   
   const data = await res.json().catch(() => ({}));
-  
-  // 记录详细的响应信息
-  console.log('RPC Response:', {
-    url: `${url}${path}`,
-    status: res.status,
-    statusText: res.statusText,
-    data: data,
-    hasError: !!data.error
-  });
-  
   return data;
 }
 
@@ -49,7 +39,6 @@ export async function GET(req: NextRequest) {
     }
 
     // 先获取有库存的Lot/Serial产品（通过stock.quant）
-    console.log('Getting lots with stock from stock.quant');
     const quantsData = await rpc(
       base,
       '/web/dataset/call_kw',
@@ -81,7 +70,6 @@ export async function GET(req: NextRequest) {
     );
 
     if (quantsData?.error) {
-      console.error('Odoo API error details:', quantsData.error);
       const errorMessage = quantsData.error.message || quantsData.error.data?.message || JSON.stringify(quantsData.error);
       throw new Error(`Odoo API错误: ${errorMessage}`);
     }
@@ -103,7 +91,6 @@ export async function GET(req: NextRequest) {
     );
 
     if (lotsData?.error) {
-      console.error('Odoo API error details:', lotsData.error);
       const errorMessage = lotsData.error.message || lotsData.error.data?.message || JSON.stringify(lotsData.error);
       throw new Error(`Odoo API错误: ${errorMessage}`);
     }
@@ -136,15 +123,6 @@ export async function GET(req: NextRequest) {
       
       // 使用Lot的name作为序列号
       const lotSerialNumber = lot?.name || `LOT-${quant.lot_id[0]}`;
-      
-      // 添加详细调试信息
-      console.log('Quant ID:', quant.id);
-      console.log('Lot ID:', quant.lot_id[0]);
-      console.log('Lot object:', lot);
-      console.log('Lot name:', lot?.name);
-      console.log('Lot ref:', lot?.ref);
-      console.log('Final serial number:', lotSerialNumber);
-      console.log('Quantity:', quant.quantity);
       
       return {
         id: quant.id,

@@ -232,7 +232,7 @@ export async function POST(req: NextRequest) {
           }
         }
       } catch (inventoryError) {
-        console.warn('stock.inventory 方法失败，尝试其他方法:', inventoryError);
+        // stock.inventory 方法失败，尝试其他方法
       }
 
       // 方法2: 尝试使用 stock.quant 直接调整（Odoo 17备用方法）
@@ -286,7 +286,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ ok: true, method: 'stock.quant', location_id: locId });
         }
       } catch (quantError) {
-        console.warn('stock.quant 方法失败，尝试旧版方法:', quantError);
+        // stock.quant 方法失败，尝试旧版方法
       }
 
       // 方法3: 回退到旧版向导（如果仍然可用）
@@ -313,12 +313,11 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ ok: true, method: 'legacy.wizard', location_id: locId });
         }
       } catch (legacyError) {
-        console.warn('旧版向导也失败:', legacyError);
+        // 旧版向导也失败
       }
 
       throw new Error('所有库存调整方法都失败了');
     } catch (e: any) {
-      console.error('库存更新失败:', e);
       return NextResponse.json({ error: e?.message || '库存更新失败' }, { status: 500 });
     }
   } catch (e: any) {

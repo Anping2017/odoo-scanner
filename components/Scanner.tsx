@@ -77,9 +77,9 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         setIsFocused(true);
       } else {
       }
-    } catch (e) {
-      console.warn('设置聚焦失败:', e);
-    }
+      } catch (e) {
+        // 设置聚焦失败
+      }
   };
 
   // 触摸聚焦功能
@@ -109,9 +109,9 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           setTimeout(() => setIsFocused(false), 1000);
         }
       }
-    } catch (e) {
-      console.warn('触摸聚焦失败:', e);
-    }
+      } catch (e) {
+        // 触摸聚焦失败
+      }
   };
 
   // 缩放控制功能
@@ -138,9 +138,9 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           setTimeout(() => setIsZooming(false), 500);
         }
       }
-    } catch (e) {
-      console.warn('缩放失败:', e);
-    }
+      } catch (e) {
+        // 缩放失败
+      }
   };
 
   // 双击放大功能（三倍放大并聚焦）
@@ -165,7 +165,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
               } as any);
               setIsFocused(true);
             } catch (error) {
-              console.log('聚焦失败:', error);
+              // 聚焦失败
             }
           }
         }
@@ -286,14 +286,13 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         const codes = await detector.detect(canvas);
         const txt = codes?.[0]?.rawValue;
         if (txt) {
-          console.log('原生检测器识别成功:', txt, '格式:', codes[0]?.format);
           firedRef.current = true; 
           stop(); 
           onDetected(String(txt)); 
           return;
         }
       } catch (e) {
-        console.warn('原生检测器识别失败:', e);
+        // 原生检测器识别失败
       }
 
       rafRef.current = requestAnimationFrame(loop);
@@ -407,7 +406,6 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       (res: any) => {
         if (!res || firedRef.current) return;
         const text = res.getText?.() ?? res.text ?? '';
-        console.log('ZXing识别成功:', text, '格式:', res.getBarcodeFormat?.());
         firedRef.current = true; 
         stop(); 
         onDetected(text);
@@ -569,7 +567,6 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         alert('未识别到条码，请选择更清晰的照片重试。');
       }
     } catch (e: any) {
-      console.error('图片识别失败:', e);
       alert('图片识别失败：' + (e?.message || String(e)));
     } finally {
       e.target.value = '';

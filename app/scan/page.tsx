@@ -75,9 +75,9 @@ export default function ScanPage() {
       if (data?.product?.image_1920) {
         setHighResImage(data.product.image_1920);
       }
-    } catch (error) {
-      console.error('获取高分辨率图片失败:', error);
-    }
+      } catch (error) {
+        // 获取高分辨率图片失败
+      }
   }, [product?.id, lastCode]);
 
   const fetchByCode = useCallback(async (code: string) => {
@@ -120,7 +120,6 @@ export default function ScanPage() {
       );
       if (p?.id) loadHistory(p.id);
     } catch (error: any) {
-      console.error('产品搜索失败:', error);
       if (error.name !== 'AbortError') {
         showToast(`搜索失败: ${error.message}`, 'error');
       }
@@ -206,7 +205,9 @@ export default function ScanPage() {
       
       // 异步重新加载历史记录（不阻塞UI）
       if (product.id) {
-        loadHistory(product.id).catch(e => console.warn('刷新历史记录失败:', e));
+        loadHistory(product.id).catch(e => {
+          // 刷新历史记录失败
+        });
       }
       showToast('库存已更新（Odoo 中已记录库存调整历史）', 'success');
     } catch (e: any) {
