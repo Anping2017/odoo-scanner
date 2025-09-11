@@ -14,6 +14,7 @@ type Product = {
   standard_price?: number;
   raytech_stock?: number;
   raytech_p3?: number;
+  image_1920?: string;
 };
 
 type HistoryItem = {
@@ -474,6 +475,32 @@ export default function ScanPage() {
               </button>
             </div>
           ) : null}
+
+          {/* 产品图片卡片 */}
+          {product && product.image_1920 && (
+            <div
+              style={{
+                background: '#fff',
+                border: '1px solid #e5e7eb',
+                borderRadius: 12,
+                padding: 14,
+                textAlign: 'center',
+              }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 14 }}>产品图片</div>
+              <img
+                src={`data:image/png;base64,${product.image_1920}`}
+                alt={product.name}
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '200px',
+                  borderRadius: 8,
+                  border: '1px solid #e5e7eb',
+                  objectFit: 'contain',
+                }}
+              />
+            </div>
+          )}
 
           {/* 最近调整记录 */}
           {product ? (
