@@ -18,6 +18,7 @@ async function rpc(url: string, path: string, body: any, cookie: string) {
 export async function GET(req: NextRequest) {
   try {
     const code = req.nextUrl.searchParams.get('code')?.trim();
+    const highResImage = req.nextUrl.searchParams.get('high_res_image') === 'true';
     if (!code) return NextResponse.json({ error: 'code required' }, { status: 400 });
 
     // 使用 req.cookies 而不是 cookies()
@@ -55,7 +56,9 @@ export async function GET(req: NextRequest) {
             ['barcode', '=', code],
             ['default_code', '=', code],
           ],
-          ['id', 'name', 'barcode', 'default_code', 'qty_available', 'free_qty', 'list_price', 'standard_price', 'raytech_stock', 'raytech_p3', 'image_1920'],
+          highResImage 
+            ? ['id', 'name', 'barcode', 'default_code', 'qty_available', 'free_qty', 'list_price', 'standard_price', 'raytech_stock', 'raytech_p3', 'image_1920']
+            : ['id', 'name', 'barcode', 'default_code', 'qty_available', 'free_qty', 'list_price', 'standard_price', 'raytech_stock', 'raytech_p3', 'image_128'],
         ],
         kwargs: { limit: 1, context: ctx },
       },

@@ -14,7 +14,7 @@ type Product = {
   standard_price?: number;
   raytech_stock?: number;
   raytech_p3?: number;
-  image_1920?: string;
+  image_128?: string;
 };
 
 type HistoryItem = {
@@ -39,6 +39,8 @@ export default function ScanPage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [updating, setUpdating] = useState(false);
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [highResImage, setHighResImage] = useState<string | null>(null);
 
   const fetchLockRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -60,6 +62,22 @@ export default function ScanPage() {
       setHistory([]);
     }
   }, []);
+
+  // 获取高分辨率图片
+  const fetchHighResImage = useCallback(async () => {
+    if (!product?.id || !lastCode) return;
+    try {
+      const res = await fetch(`/api/product?code=${encodeURIComponent(lastCode)}&high_res_image=true`, {
+        cache: 'no-store',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data?.product?.image_1920) {
+        setHighResImage(data.product.image_1920);
+      }
+    } catch (error) {
+      console.error('获取高分辨率图片失败:', error);
+    }
+  }, [product?.id, lastCode]);
 
   const fetchByCode = useCallback(async (code: string) => {
     const trimmed = code.trim();
@@ -477,7 +495,7 @@ export default function ScanPage() {
           ) : null}
 
           {/* 产品图片卡片 */}
-          {product && product.image_1920 && (
+          {product && product.image_128 && (
             <div
               style={{
                 background: '#fff',
@@ -489,16 +507,31 @@ export default function ScanPage() {
             >
               <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 14 }}>产品图片</div>
               <img
-                src={`data:image/png;base64,${product.image_1920}`}
+                src={`data:image/png;base64,${product.image_128}`}
                 alt={product.name}
+                loading="lazy"
                 style={{
                   maxWidth: '100%',
-                  maxHeight: '200px',
+                  maxHeight: '150px',
                   borderRadius: 8,
                   border: '1px solid #e5e7eb',
                   objectFit: 'contain',
+                  backgroundColor: '#f9fafb',
+                  cursor: 'pointer',
+                }}
+                onClick={() => {
+                  setShowImageModal(true);
+                  if (!highResImage) {
+                    fetchHighResImage();
+                  }
+                }}
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
                 }}
               />
+              <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+                点击查看大图
+              </div>
             </div>
           )}
 
@@ -604,6 +637,87 @@ export default function ScanPage() {
           清空
         </button>
       </form>
+
+      {/* 图片放大模态框 */}
+      {showImageModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+          }}
+          onClick={() => setShowImageModal(false)}
+        >
+          <div
+            style={{
+              position: 'relative',
+              maxWidth: '90%',
+              maxHeight: '90%',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {highResImage ? (
+              <img
+                src={`data:image/png;base64,${highResImage}`}
+                alt={product?.name || '产品图片'}
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                  borderRadius: 8,
+                  objectFit: 'contain',
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: '200px',
+                  height: '200px',
+                  backgroundColor: '#f9fafb',
+                  borderRadius: 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#6b7280',
+                  fontSize: 14,
+                }}
+              >
+                加载中...
+              </div>
+            )}
+            <button
+              onClick={() => setShowImageModal(false)}
+              style={{
+                position: 'absolute',
+                top: -10,
+                right: -10,
+                width: 30,
+                height: 30,
+                borderRadius: '50%',
+                border: 'none',
+                backgroundColor: '#fff',
+                color: '#374151',
+                fontSize: 18,
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
+              }}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
       
       {/* Toast通知 */}
       {toast && (
