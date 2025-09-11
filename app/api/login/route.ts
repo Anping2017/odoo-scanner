@@ -2,6 +2,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolvePreset } from '@/lib/odooPresets';
 
+// 强制动态渲染
+export const dynamic = 'force-dynamic';
+
 type AuthBody = {
   login: string;
   password: string;

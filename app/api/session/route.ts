@@ -2,6 +2,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { rpc } from '../_odoo';
 
+// 强制动态渲染
+export const dynamic = 'force-dynamic';
+
 function getCookie(req: NextRequest, name: string) {
   const cookie = req.headers.get('cookie') || '';
   const m = cookie.match(new RegExp(`${name}=([^;]+)`));

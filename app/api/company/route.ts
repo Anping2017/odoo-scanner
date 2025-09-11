@@ -2,6 +2,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolvePreset } from '@/lib/odooPresets';
 
+// 强制动态渲染
+export const dynamic = 'force-dynamic';
+
 async function rpc(url: string, path: string, body: any, cookie: string) {
   const res = await fetch(`${url}${path}`, {
     method: 'POST',

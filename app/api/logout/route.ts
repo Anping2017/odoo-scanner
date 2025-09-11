@@ -1,6 +1,9 @@
 // app/api/logout/route.ts
 import { NextResponse } from 'next/server';
 
+// 强制动态渲染
+export const dynamic = 'force-dynamic';
+
 function clearCookie(res: NextResponse, name: string) {
   res.cookies.set({
     name,

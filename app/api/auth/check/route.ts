@@ -3,6 +3,9 @@ import { cookies, headers } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { resolvePreset } from '@/lib/odooPresets';
 
+// 强制动态渲染
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     const ck = cookies();
