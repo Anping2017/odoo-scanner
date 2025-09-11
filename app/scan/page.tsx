@@ -262,7 +262,7 @@ export default function ScanPage() {
             overflow: 'hidden',
             borderRadius: 12,
             background: '#000',
-            height: scanning ? '56vh' : '18vh', // 扫描时56vh，暂停时18vh（约1/3）
+            height: scanning ? '56vh' : '14vh', // 扫描时56vh，暂停时14vh（约1/4）
             transition: 'height 0.3s ease-in-out', // 添加平滑过渡动画
           }}
         >
@@ -349,78 +349,71 @@ export default function ScanPage() {
 
               {/* 盘点输入区 */}
               <div style={{ marginTop: 12 }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: 8,
-                    alignItems: 'center',
-                    marginBottom: 8,
-                  }}
-                >
-                  <label style={{ fontSize: 14 }}>盘点数量：</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <button
-                      onClick={() => {
-                        const current = Number(counted) || 0;
-                        setCounted(String(current - 1));
-                      }}
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 8,
-                        border: '1px solid #e5e7eb',
-                        background: '#fff',
-                        color: '#374151',
-                        fontSize: 18,
-                        fontWeight: 600,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                      }}
-                      title="减少1"
-                    >
-                      −
-                    </button>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      value={counted}
-                      onChange={(e) => setCounted(e.target.value)}
-                      style={{
-                        width: 100,
-                        padding: '8px 10px',
-                        borderRadius: 8,
-                        border: '1px solid #e5e7eb',
-                        outline: 'none',
-                        fontSize: 16,
-                        textAlign: 'center',
-                      }}
-                    />
-                    <button
-                      onClick={() => {
-                        const current = Number(counted) || 0;
-                        setCounted(String(current + 1));
-                      }}
-                      style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 8,
-                        border: '1px solid #e5e7eb',
-                        background: '#fff',
-                        color: '#374151',
-                        fontSize: 18,
-                        fontWeight: 600,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                      }}
-                      title="增加1"
-                    >
-                      +
-                    </button>
-                  </div>
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ fontSize: 14, fontWeight: 700 }}>盘点数量（调整为）：</label>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+                  <button
+                    onClick={() => {
+                      const current = Number(counted) || 0;
+                      setCounted(String(current - 1));
+                    }}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 8,
+                      border: '1px solid #e5e7eb',
+                      background: '#fff',
+                      color: '#374151',
+                      fontSize: 18,
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                    }}
+                    title="减少1"
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={counted}
+                    onChange={(e) => setCounted(e.target.value)}
+                    style={{
+                      width: 100,
+                      padding: '8px 10px',
+                      borderRadius: 8,
+                      border: '1px solid #e5e7eb',
+                      outline: 'none',
+                      fontSize: 16,
+                      textAlign: 'center',
+                    }}
+                  />
+                  <button
+                    onClick={() => {
+                      const current = Number(counted) || 0;
+                      setCounted(String(current + 1));
+                    }}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 8,
+                      border: '1px solid #e5e7eb',
+                      background: '#fff',
+                      color: '#374151',
+                      fontSize: 18,
+                      fontWeight: 600,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                    }}
+                    title="增加1"
+                  >
+                    +
+                  </button>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
