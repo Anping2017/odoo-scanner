@@ -217,8 +217,12 @@ export default function DeviceInventoryPage() {
     // 从历史中移除这个操作
     setOperationHistory(prev => prev.filter(op => op.id !== operationId));
     
-    // 隐藏提示
-    setToast(prev => ({ ...prev, show: false }));
+    // 更新提示框消息
+    setToast(prev => ({ 
+      ...prev, 
+      message: '操作已撤销',
+      canUndo: false 
+    }));
   }, [operationHistory, devices]);
 
   // 手动选择设备
@@ -447,6 +451,49 @@ export default function DeviceInventoryPage() {
 
       {/* 搜索区域和统计信息 */}
       <div style={{ padding: '0 16px 16px', marginTop: 24 }}>
+        {/* 消息提示框 - 在手动搜索上方 */}
+        {toast.show && (
+          <div style={{
+            background: '#fff',
+            borderRadius: 8,
+            padding: '12px 16px',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+            border: '1px solid #e5e7eb',
+            marginBottom: 16,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+          }}>
+            <div style={{
+              fontSize: 14,
+              color: '#374151',
+              flex: 1,
+              fontWeight: 500,
+            }}>
+              {toast.message}
+            </div>
+            {toast.canUndo && (
+              <button
+                onClick={() => toast.operationId && undoOperation(toast.operationId)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 6,
+                  border: '1px solid #d1d5db',
+                  background: '#fff',
+                  color: '#374151',
+                  fontSize: 12,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                撤销
+              </button>
+            )}
+          </div>
+        )}
+        
         {/* 手动搜索 */}
         <div style={{
           fontSize: 14,
@@ -670,74 +717,6 @@ export default function DeviceInventoryPage() {
               {scanResult.found ? '继续扫码' : '重新扫码'}
             </button>
           </div>
-        </div>
-      )}
-      
-      {/* 悬浮操作提示框 - 页面底部 */}
-      {toast.show && (
-        <div style={{
-          position: 'fixed',
-          bottom: 20,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: '#fff',
-          borderRadius: 12,
-          padding: '16px 20px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
-          border: '1px solid #e5e7eb',
-          zIndex: 1000,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 16,
-          maxWidth: '90%',
-          minWidth: 320,
-          backdropFilter: 'blur(8px)',
-        }}>
-          <div style={{
-            fontSize: 14,
-            color: '#374151',
-            flex: 1,
-            fontWeight: 500,
-          }}>
-            {toast.message}
-          </div>
-          {toast.canUndo && (
-            <button
-              onClick={() => toast.operationId && undoOperation(toast.operationId)}
-              style={{
-                padding: '8px 16px',
-                borderRadius: 8,
-                border: '1px solid #d1d5db',
-                background: '#fff',
-                color: '#374151',
-                fontSize: 14,
-                fontWeight: 500,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              撤销
-            </button>
-          )}
-          <button
-            onClick={() => setToast(prev => ({ ...prev, show: false }))}
-            style={{
-              padding: '8px 12px',
-              borderRadius: 8,
-              border: 'none',
-              background: '#f3f4f6',
-              color: '#6b7280',
-              fontSize: 14,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            ✕
-          </button>
         </div>
       )}
     </div>
