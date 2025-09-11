@@ -267,11 +267,22 @@ export default function DeviceInventoryPage() {
             height: scanning ? '200px' : '60px',
             transition: 'height 0.3s ease',
           }}>
-            <Scanner
-              onDetected={handleDetected}
-              scanning={scanning}
-              onScanningChange={setScanning}
-            />
+          {scanning ? (
+            <Scanner onDetected={handleDetected} />
+          ) : (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                color: '#fff',
+                fontSize: 16,
+              }}
+            >
+              摄像头已暂停
+            </div>
+          )}
           </div>
           <div style={{ 
             marginTop: 8, 
