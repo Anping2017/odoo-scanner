@@ -411,14 +411,6 @@ export default function DeviceInventoryPage() {
             </div>
           )}
           </div>
-          <div style={{ 
-            marginTop: 8, 
-            fontSize: 12, 
-            color: '#6b7280',
-            textAlign: 'center'
-          }}>
-            {scanning ? '扫码选择设备' : '点击重新扫码'}
-          </div>
           
           {/* 重新扫码按钮 - 条件显示 */}
           {scanCompleted && (
