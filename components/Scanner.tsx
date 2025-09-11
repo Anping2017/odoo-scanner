@@ -16,12 +16,10 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
   const engineRef = useRef<'native' | 'zxing' | null>(null);
 
   const [err, setErr] = useState('');
-  const [debugInfo, setDebugInfo] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isZooming, setIsZooming] = useState(false);
   const [code93Mode, setCode93Mode] = useState(false); // 默认兼容所有条码格式
-  const [imageQuality, setImageQuality] = useState<number>(0); // 图像质量评分
   const [showScanHint, setShowScanHint] = useState(true); // 控制扫码提示显示
 
   const clearRaf = () => {
@@ -59,29 +57,9 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     ctx.putImageData(imageData, 0, 0);
   };
 
-  // 图像质量检测
-  const calculateImageQuality = (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D): number => {
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-    
-    let totalVariance = 0;
-    let pixelCount = 0;
-    
-    // 计算图像方差（衡量清晰度）
-    for (let i = 0; i < data.length; i += 4) {
-      const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-      totalVariance += Math.pow(gray - 128, 2);
-      pixelCount++;
-    }
-    
-    const variance = totalVariance / pixelCount;
-    const quality = Math.min(100, Math.max(0, (variance / 1000) * 100)); // 转换为0-100评分
-    
-    return Math.round(quality);
-  };
 
 
-  // 设置自动聚焦功能
+  // 设置聚焦功能
   const setupAutoFocus = async (video: HTMLVideoElement, stream: MediaStream, formats?: string[]) => {
     try {
       const track = stream.getVideoTracks()[0];
@@ -97,13 +75,10 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           focusDistance: 0.1
         } as any);
         setIsFocused(true);
-        setDebugInfo(`自动聚焦已启用 - 原生检测器支持格式: ${formats?.join(', ') || '未知'}`);
       } else {
-        setDebugInfo(`自动聚焦不支持 - 使用ZXing库进行识别`);
       }
     } catch (e) {
-      console.warn('设置自动聚焦失败:', e);
-      setDebugInfo(`自动聚焦失败 - 使用ZXing库进行识别`);
+      console.warn('设置聚焦失败:', e);
     }
   };
 
@@ -174,7 +149,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     const newZoom = zoomLevel === 1 ? 3 : 1; // 改为三倍放大
     await handleZoomChange(newZoom);
     
-    // 放大时自动聚焦
+    // 放大时聚焦
     if (newZoom === 3) {
       const video = videoRef.current;
       if (video && video.srcObject) {
@@ -189,9 +164,8 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
                 focusDistance: 0.1
               } as any);
               setIsFocused(true);
-              console.log('双击放大后自动聚焦');
             } catch (error) {
-              console.log('自动聚焦失败:', error);
+              console.log('聚焦失败:', error);
             }
           }
         }
@@ -240,9 +214,6 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     const formats = desired.filter(f => fmts.includes(f));
     if (!formats.length) return false;
     
-    const code93Supported = formats.includes('code_93');
-    const modeText = code93Mode ? ' (Code 93专用模式)' : ' (兼容所有条码)';
-    setDebugInfo(`原生检测器支持格式: ${formats.join(', ')}${code93Supported ? modeText : ' (Code 93不支持)'}`);
 
     const constraints: MediaStreamConstraints = {
       video: {
@@ -250,7 +221,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         width:  { ideal: highPrecision ? 3840 : 2560 }, // 进一步提升到4K分辨率
         height: { ideal: highPrecision ? 2160 : 1440 }, // 进一步提升到4K分辨率
         frameRate: { ideal: 60 }, // 提高帧率到60fps
-        // 添加自动聚焦支持
+        // 添加聚焦支持
         focusMode: { ideal: 'continuous' },
         focusDistance: { ideal: 0.05 }, // 更近距离聚焦
         // 添加缩放支持
@@ -278,7 +249,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     video.srcObject = stream;
     await video.play();
 
-    // 设置自动聚焦
+    // 设置聚焦
     await setupAutoFocus(video, stream, formats);
 
     if (!canvasRef.current) {
@@ -310,10 +281,6 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
 
       // 应用图像后处理提高识别精度
       processImageForRecognition(canvas, ctx);
-
-      // 检测图像质量
-      const quality = calculateImageQuality(canvas, ctx);
-      setImageQuality(quality);
 
       try {
         const codes = await detector.detect(canvas);
@@ -374,15 +341,13 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     hints.set(DecodeHintType.POSSIBLE_FORMATS, hints.get(DecodeHintType.POSSIBLE_FORMATS)); // 确保格式设置
     
     if (!readerRef.current) readerRef.current = new BrowserMultiFormatReader(hints as any);
-    
-    setDebugInfo(code93Mode ? '使用ZXing库进行识别 (Code 93专门模式)' : '使用ZXing库进行识别 (Code 93优先)');
 
     const size = highPrecision
       ? { 
           width: { ideal: 3840 }, 
           height: { ideal: 2160 },
           frameRate: { ideal: 60 },
-          // 添加自动聚焦支持
+          // 添加聚焦支持
           focusMode: { ideal: 'continuous' },
           focusDistance: { ideal: 0.05 },
           // 添加缩放支持
@@ -407,7 +372,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           width: { ideal: 2560 }, 
           height: { ideal: 1440 },
           frameRate: { ideal: 60 },
-          // 添加自动聚焦支持
+          // 添加聚焦支持
           focusMode: { ideal: 'continuous' },
           focusDistance: { ideal: 0.05 },
           // 添加缩放支持
@@ -726,22 +691,21 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         )}
         
         {/* 扫码框指示器 */}
-        {showScanHint && (
-          <div style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: '80%',
-            height: '45%',
-            border: '2px dashed rgba(255, 255, 255, 0.6)',
-            borderRadius: 12,
-            pointerEvents: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            animation: 'fadeOut 0.5s ease-out 2.5s forwards'
-          }}>
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: '80%',
+          height: '45%',
+          border: '2px dashed rgba(255, 255, 255, 0.6)',
+          borderRadius: 12,
+          pointerEvents: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          {showScanHint && (
             <div style={{
               color: 'rgba(255, 255, 255, 0.8)',
               fontSize: 12,
@@ -749,15 +713,16 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
               textAlign: 'center',
               backgroundColor: 'rgba(0, 0, 0, 0.3)',
               padding: '4px 8px',
-              borderRadius: 4
+              borderRadius: 4,
+              animation: 'fadeOut 0.5s ease-out 2.5s forwards'
             }}>
               将条码对准此区域<br/>
               <span style={{ fontSize: 10, opacity: 0.7 }}>
                 {code93Mode ? 'Code 93专用模式' : '兼容所有条码'} • 点击聚焦 • 双击3倍放大
               </span>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {err && (
@@ -771,31 +736,6 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         </div>
       )}
       
-      {debugInfo && (
-        <div style={{ 
-          color: '#6b7280', 
-          fontSize: 12, 
-          padding: '4px 8px',
-          textAlign: 'center',
-          backgroundColor: '#f9fafb',
-          borderRadius: 4
-        }}>
-          {debugInfo}
-        </div>
-      )}
-      
-      {imageQuality > 0 && (
-        <div style={{ 
-          color: imageQuality > 70 ? '#10b981' : imageQuality > 40 ? '#f59e0b' : '#ef4444',
-          fontSize: 12, 
-          padding: '4px 8px',
-          textAlign: 'center',
-          backgroundColor: imageQuality > 70 ? '#ecfdf5' : imageQuality > 40 ? '#fffbeb' : '#fef2f2',
-          borderRadius: 4
-        }}>
-          图像质量: {imageQuality}% {imageQuality > 70 ? '(优秀)' : imageQuality > 40 ? '(良好)' : '(需改善)'}
-        </div>
-      )}
     </div>
   );
 }
