@@ -318,44 +318,109 @@ export default function ScanPage() {
               </div>
 
               {/* 盘点输入区 */}
-              <div
-                style={{
-                  marginTop: 12,
-                  display: 'flex',
-                  gap: 8,
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                }}
-              >
-                <label style={{ fontSize: 14 }}>盘点数量（调整到）：</label>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  value={counted}
-                  onChange={(e) => setCounted(e.target.value)}
+              <div style={{ marginTop: 12 }}>
+                <div
                   style={{
-                    width: 140,
-                    padding: '8px 10px',
-                    borderRadius: 8,
-                    border: '1px solid #e5e7eb',
-                    outline: 'none',
-                    fontSize: 16,
-                  }}
-                />
-                <button
-                  onClick={handleUpdateInventory}
-                  disabled={updating}
-                  style={{
-                    padding: '10px 14px',
-                    borderRadius: 10,
-                    border: 'none',
-                    background: updating ? '#9ca3af' : '#111827',
-                    color: '#fff',
-                    fontWeight: 600,
+                    display: 'flex',
+                    gap: 8,
+                    alignItems: 'center',
+                    marginBottom: 8,
                   }}
                 >
-                  {updating ? '更新中…' : '更新库存'}
-                </button>
+                  <label style={{ fontSize: 14 }}>盘点数量（调整到）：</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <button
+                      onClick={() => {
+                        const current = Number(counted) || 0;
+                        setCounted(String(current - 1));
+                      }}
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 8,
+                        border: '1px solid #e5e7eb',
+                        background: '#fff',
+                        color: '#374151',
+                        fontSize: 18,
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                      }}
+                      title="减少1"
+                    >
+                      −
+                    </button>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={counted}
+                      onChange={(e) => setCounted(e.target.value)}
+                      style={{
+                        width: 100,
+                        padding: '8px 10px',
+                        borderRadius: 8,
+                        border: '1px solid #e5e7eb',
+                        outline: 'none',
+                        fontSize: 16,
+                        textAlign: 'center',
+                      }}
+                    />
+                    <button
+                      onClick={() => {
+                        const current = Number(counted) || 0;
+                        setCounted(String(current + 1));
+                      }}
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 8,
+                        border: '1px solid #e5e7eb',
+                        background: '#fff',
+                        color: '#374151',
+                        fontSize: 18,
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                      }}
+                      title="增加1"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={handleUpdateInventory}
+                    disabled={updating}
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: 10,
+                      border: 'none',
+                      background: updating ? '#9ca3af' : '#111827',
+                      color: '#fff',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {updating ? '更新中…' : '更新库存'}
+                  </button>
+                  <button
+                    onClick={handleRescan}
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: 10,
+                      border: '1px solid #e5e7eb',
+                      background: '#fff',
+                      color: '#374151',
+                      fontWeight: 600,
+                    }}
+                  >
+                    重新扫码
+                  </button>
+                </div>
               </div>
             </div>
           ) : lastCode && !isLoading ? (
