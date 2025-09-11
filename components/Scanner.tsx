@@ -203,7 +203,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
     try { fmts = await (globalThis as any).BarcodeDetector.getSupportedFormats?.() || []; } catch {}
     // 优先支持Code 93，然后是其他格式
     const desired = code93Mode 
-      ? ['code_93'] // Code 93专用模式：只支持Code 93
+      ? ['code_93'] // Code 93专用模式（只扫公司用条码）：只支持Code 93
       : [
           'code_93',  // 优先Code 93
           'code_128', 'code_39', 'codabar', 'code_11',
@@ -476,7 +476,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
       
       const fmts = await Detector.getSupportedFormats?.() || [];
       const formats = code93Mode 
-        ? ['code_93'].filter(f => fmts.includes(f)) // Code 93专用模式
+        ? ['code_93'].filter(f => fmts.includes(f)) // Code 93专用模式（只扫公司用条码）
         : [
             'code_93',  // 优先Code 93
             'code_128', 'code_39', 'codabar', 'code_11',
@@ -718,7 +718,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
             }}>
               将条码对准此区域<br/>
               <span style={{ fontSize: 10, opacity: 0.7 }}>
-                {code93Mode ? 'Code 93专用模式' : '兼容所有条码'} • 点击聚焦 • 双击3倍放大
+                {code93Mode ? 'Code 93专用模式（只扫公司用条码）' : '兼容所有条码'} • 点击聚焦 • 双击3倍放大
               </span>
             </div>
           )}
@@ -735,7 +735,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         borderRadius: 4,
         marginTop: 12
       }}>
-        {code93Mode ? 'Code 93专用模式' : '兼容所有条码'} • 点击聚焦 • 双击3倍放大
+        {code93Mode ? 'Code 93专用模式（只扫公司用条码）' : '兼容所有条码'} • 点击聚焦 • 双击3倍放大
       </div>
 
       {err && (
