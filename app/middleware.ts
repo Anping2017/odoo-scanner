@@ -5,9 +5,9 @@ import type { NextRequest } from 'next/server';
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  const hasSession = !!req.cookies.get('odoo_session_id')?.value;
-  const hasBase    = !!req.cookies.get('odoo_base')?.value;
-  const hasDb      = !!req.cookies.get('odoo_db')?.value;
+  const hasSession = !!req.cookies.get('od_session')?.value;
+  const hasBase    = !!req.cookies.get('od_base')?.value;
+  const hasDb      = !!req.cookies.get('od_db')?.value;
   const authed     = hasSession && hasBase && hasDb;
 
   if (pathname === '/') {

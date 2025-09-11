@@ -16,7 +16,7 @@ function clearCookie(res: NextResponse, name: string) {
 
 function buildResponse() {
   const res = NextResponse.json({ ok: true });
-  ['odoo_session_id', 'odoo_base', 'odoo_db'].forEach(n => clearCookie(res, n));
+  ['od_session', 'od_base', 'od_db', 'od_company', 'od_location'].forEach(n => clearCookie(res, n));
   return res;
 }
 

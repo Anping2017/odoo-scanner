@@ -74,18 +74,25 @@ export async function POST(req: NextRequest) {
     // 3) 设置前端需要的 cookie（保持 30 天）
     const res = NextResponse.json({ ok: true, base, db, companyId: companyId || null });
 
-    const maxAge = remember ? 60 * 60 * 24 * 30 : undefined; // 30 天
-    const common = { path: '/', secure: true, sameSite: 'lax' as const };
+    // 修复cookie设置问题
+    const maxAge = remember ? 60 * 60 * 24 * 30 : 60 * 60 * 24; // 30天或1天
+    const isHttps = req.url.startsWith('https://') || req.headers.get('x-forwarded-proto') === 'https';
+    
+    const common = { 
+      path: '/', 
+      secure: isHttps, // 只在HTTPS环境下设置secure
+      sameSite: 'lax' as const,
+      maxAge: maxAge // 始终设置maxAge
+    };
 
-    res.cookies.set('od_session', session_id, { ...common, httpOnly: true, ...(maxAge ? { maxAge } : {}) });
-    res.cookies.set('od_base', base, { ...common, httpOnly: false, ...(maxAge ? { maxAge } : {}) });
-    res.cookies.set('od_db', db, { ...common, httpOnly: false, ...(maxAge ? { maxAge } : {}) });
+    res.cookies.set('od_session', session_id, { ...common, httpOnly: true });
+    res.cookies.set('od_base', base, { ...common, httpOnly: false });
+    res.cookies.set('od_db', db, { ...common, httpOnly: false });
     if (companyId) {
-      res.cookies.set('od_company', String(companyId), { ...common, httpOnly: false, ...(maxAge ? { maxAge } : {}) });
-      
+      res.cookies.set('od_company', String(companyId), { ...common, httpOnly: false });
     }
     if (preset?.defaultLocationId) {
-      res.cookies.set('od_location', String(preset.defaultLocationId), { ...common, httpOnly: false, ...(maxAge ? { maxAge } : {}) });
+      res.cookies.set('od_location', String(preset.defaultLocationId), { ...common, httpOnly: false });
     }
 
     return res;

@@ -178,7 +178,13 @@ export async function POST(req: NextRequest) {
 
     // ② 保存本次自动判定的库位，便于下次无需再传
     const resp = NextResponse.json({ ok: true, location_id: locId, method: 'pending' });
-    resp.cookies.set('od_location', String(locId), { path: '/', maxAge: 60 * 60 * 24 * 30 });
+    const isHttps = req.url.startsWith('https://') || req.headers.get('x-forwarded-proto') === 'https';
+    resp.cookies.set('od_location', String(locId), { 
+      path: '/', 
+      maxAge: 60 * 60 * 24 * 30,
+      secure: isHttps,
+      sameSite: 'lax'
+    });
 
     // ③ Odoo 17 库存调整方法
     // 尝试多种方法以确保兼容性

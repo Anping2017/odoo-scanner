@@ -20,8 +20,8 @@ function isAllowedBase(u: string) {
 
 export async function GET(req: NextRequest) {
   try {
-    const sessionId = getCookie(req, 'odoo_session_id');
-    const base = getCookie(req, 'odoo_base');
+    const sessionId = getCookie(req, 'od_session');
+    const base = getCookie(req, 'od_base');
     if (!sessionId || !base || !isAllowedBase(base)) {
       return NextResponse.json({ authenticated: false });
     }

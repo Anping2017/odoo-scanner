@@ -28,17 +28,17 @@ export function getCookie(req: NextRequest, name: string) {
 }
 
 export function getSessionId(req: NextRequest) {
-  return getCookie(req, 'odoo_session_id');
+  return getCookie(req, 'od_session');
 }
 
 export function getBaseFromCookie(req: NextRequest) {
-  const b = getCookie(req, 'odoo_base');
+  const b = getCookie(req, 'od_base');
   if (!b || !isAllowedBase(b)) throw new Error('Odoo base missing or not allowed');
   return b.replace(/\/+$/, '');
 }
 
 export function getDbFromCookie(req: NextRequest) {
-  return getCookie(req, 'odoo_db') || '';
+  return getCookie(req, 'od_db') || '';
 }
 
 export async function rpc(path: string, payload: any, sessionId: string, baseUrl?: string) {
