@@ -29,6 +29,19 @@ type HistoryItem = {
   updated_by?: string;
 };
 
+type SalesItem = {
+  id: number;
+  order_name: string;
+  order_id: number;
+  date: string;
+  customer: string;
+  quantity: number;
+  unit_price: number;
+  total_amount: number;
+  product_id: number;
+  type?: 'POS' | 'SO' | 'INV'; // 销售类型：POS、销售订单或发票
+};
+
 export default function ScanPage() {
   const [scanning, setScanning] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
@@ -37,6 +50,9 @@ export default function ScanPage() {
   const [codeInput, setCodeInput] = useState('');
   const [counted, setCounted] = useState<string>(''); // 盘点数量
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [salesHistory, setSalesHistory] = useState<SalesItem[]>([]);
+  const [salesPeriod, setSalesPeriod] = useState<'30' | '90' | '365' | 'all'>('30');
+  const [salesLoading, setSalesLoading] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -61,6 +77,19 @@ export default function ScanPage() {
       setHistory(Array.isArray(data?.history) ? data.history : []);
     } catch {
       setHistory([]);
+    }
+  }, []);
+
+  const loadSalesHistory = useCallback(async (pid: number, period: string = '30') => {
+    setSalesLoading(true);
+    try {
+      const res = await fetch(`/api/sales-history?product_id=${pid}&period=${period}`, { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      setSalesHistory(Array.isArray(data?.salesHistory) ? data.salesHistory : []);
+    } catch {
+      setSalesHistory([]);
+    } finally {
+      setSalesLoading(false);
     }
   }, []);
 
@@ -118,7 +147,10 @@ export default function ScanPage() {
       setCounted(
         typeof p?.qty_available === 'number' ? String(p.qty_available) : ''
       );
-      if (p?.id) loadHistory(p.id);
+      if (p?.id) {
+        loadHistory(p.id);
+        loadSalesHistory(p.id, salesPeriod);
+      }
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         showToast(`搜索失败: ${error.message}`, 'error');
@@ -127,7 +159,7 @@ export default function ScanPage() {
       setIsLoading(false);
       fetchLockRef.current = false;
     }
-  }, [loadHistory, showToast]);
+  }, [loadHistory, loadSalesHistory, salesPeriod, showToast]);
 
   const handleDetected = useCallback((code: string) => {
     if (!code) return;
@@ -142,9 +174,47 @@ export default function ScanPage() {
     setCodeInput('');
     setCounted('');
     setHistory([]);
+    setSalesHistory([]);
     lastFetchedCodeRef.current = '';
     setScanning(true);
   }, []);
+
+  const handleSalesPeriodChange = useCallback((period: '30' | '90' | '365' | 'all') => {
+    setSalesPeriod(period);
+    if (product?.id) {
+      loadSalesHistory(product.id, period);
+    }
+  }, [product?.id, loadSalesHistory]);
+
+  const testPosSales = useCallback(async () => {
+    if (!product?.id) {
+      console.log('没有产品ID，当前产品:', product);
+      showToast('请先扫码选择一个产品', 'error');
+      return;
+    }
+    
+    console.log('开始测试POS销售，产品ID:', product.id);
+    try {
+      const url = `/api/test-pos-sales?product_id=${product.id}`;
+      console.log('请求URL:', url);
+      
+      const res = await fetch(url, { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      console.log('POS销售测试结果:', data);
+      
+      // 显示测试结果摘要
+      if (data.summary) {
+        const summary = data.summary;
+        const message = `POS测试完成: 总POS订单${summary.totalPosOrders}个, 总POS行${summary.totalPosLines}个, 该产品POS行${summary.productPosLines}个`;
+        showToast(message, 'info');
+      } else {
+        showToast(`POS测试完成，查看控制台`, 'info');
+      }
+    } catch (error) {
+      console.error('POS测试失败:', error);
+      showToast('POS测试失败', 'error');
+    }
+  }, [product?.id, showToast]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -351,12 +421,12 @@ export default function ScanPage() {
               <div style={{ marginTop: 6, fontSize: 14 }}>
                 <span style={{ color: '#6b7280' }}>
                   门店零售价：<span style={{ color: '#059669' }}>
-                    {typeof product.list_price === 'number' ? `¥${product.list_price.toFixed(2)}` : '-'}
+                    {typeof product.list_price === 'number' ? `$${product.list_price.toFixed(2)}` : '-'}
                   </span>
                 </span>
                 {typeof product.standard_price === 'number' ? (
                   <span style={{ marginLeft: 10, color: '#6b7280' }}>
-                    成本：<span style={{ color: '#dc2626' }}>¥{product.standard_price.toFixed(2)}</span>
+                    成本：<span style={{ color: '#dc2626' }}>${product.standard_price.toFixed(2)}</span>
                   </span>
                 ) : null}
               </div>
@@ -366,7 +436,7 @@ export default function ScanPage() {
                 <div style={{ marginTop: 6, fontSize: 14 }}>
                   {typeof product.raytech_p3 === 'number' ? (
                     <span style={{ color: '#6b7280' }}>
-                      总部零售价：<span style={{ color: '#059669' }}>¥{product.raytech_p3.toFixed(2)}</span>
+                      总部零售价：<span style={{ color: '#059669' }}>${product.raytech_p3.toFixed(2)}</span>
                     </span>
                   ) : null}
                   {typeof product.raytech_stock === 'number' ? (
@@ -543,6 +613,116 @@ export default function ScanPage() {
               <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
                 点击查看大图
               </div>
+            </div>
+          )}
+
+          {/* 销售记录页签 */}
+          {product && (
+            <div
+              style={{
+                background: '#fff',
+                border: '1px solid #e5e7eb',
+                borderRadius: 12,
+                padding: 14,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>销售记录</div>
+                <button
+                  onClick={testPosSales}
+                  style={{
+                    padding: '4px 8px',
+                    borderRadius: 4,
+                    border: '1px solid #d1d5db',
+                    background: '#f9fafb',
+                    color: '#374151',
+                    fontSize: 10,
+                    cursor: 'pointer',
+                  }}
+                >
+                  调试POS
+                </button>
+              </div>
+              
+              {/* 页签按钮 */}
+              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                {[
+                  { key: '30', label: '最近30天' },
+                  { key: '90', label: '最近90天' },
+                  { key: '365', label: '最近365天' },
+                  { key: 'all', label: '所有' }
+                ].map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => handleSalesPeriodChange(key as any)}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 6,
+                      border: '1px solid #d1d5db',
+                      background: salesPeriod === key ? '#3b82f6' : '#fff',
+                      color: salesPeriod === key ? '#fff' : '#374151',
+                      fontSize: 12,
+                      fontWeight: salesPeriod === key ? 600 : 400,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* 销售记录列表 */}
+              {salesLoading ? (
+                <div style={{ textAlign: 'center', padding: '20px 0', color: '#6b7280' }}>
+                  加载中...
+                </div>
+              ) : salesHistory.length > 0 ? (
+                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                  {salesHistory.map((sale) => (
+                    <div
+                      key={sale.id}
+                      style={{
+                        padding: '8px 0',
+                        borderBottom: '1px solid #f3f4f6',
+                        fontSize: 12,
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontWeight: 600, color: '#374151' }}>
+                          {sale.order_name}
+                          {sale.type && (
+                            <span style={{ 
+                              fontSize: 10, 
+                              color: sale.type === 'POS' ? '#059669' : sale.type === 'INV' ? '#dc2626' : '#3b82f6',
+                              marginLeft: 6,
+                              padding: '2px 6px',
+                              borderRadius: 4,
+                              backgroundColor: sale.type === 'POS' ? '#d1fae5' : sale.type === 'INV' ? '#fee2e2' : '#dbeafe'
+                            }}>
+                              {sale.type === 'POS' ? 'POS' : sale.type === 'INV' ? '发票' : 'SO'}
+                            </span>
+                          )}
+                        </span>
+                        <span style={{ color: '#059669', fontWeight: 600 }}>
+                          ${sale.total_amount.toFixed(2)}
+                        </span>
+                      </div>
+                      <div style={{ color: '#6b7280', marginBottom: 2 }}>
+                        客户: {sale.customer}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#6b7280' }}>
+                        <span>{sale.date}</span>
+                        <span>{sale.quantity} × ${sale.unit_price.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '20px 0', color: '#6b7280' }}>
+                  暂无销售记录
+                </div>
+              )}
             </div>
           )}
 
