@@ -22,6 +22,28 @@ export default function InventoryHistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [filterStore, setFilterStore] = useState('');
   const [filterUser, setFilterUser] = useState('');
+  const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordToDelete, setPasswordToDelete] = useState('');
+  const [recordToDelete, setRecordToDelete] = useState<number | null>(null);
+
+  // 获取当前用户信息
+  const getCurrentUser = useCallback(async () => {
+    try {
+      const res = await fetch('/api/check-login', { 
+        cache: 'no-store',
+        credentials: 'include'
+      });
+      const data = await res.json().catch(() => ({}));
+      
+      if (res.ok && data.success) {
+        setCurrentUser(data.user || null);
+      }
+    } catch (e) {
+      console.warn('获取用户信息失败:', e);
+    }
+  }, []);
 
   // 加载历史记录
   const loadHistories = useCallback(async () => {
@@ -45,10 +67,66 @@ export default function InventoryHistoryPage() {
     }
   }, []);
 
+  // 显示密码输入对话框
+  const showDeletePasswordModal = useCallback((id: number) => {
+    setRecordToDelete(id);
+    setPasswordToDelete('');
+    setShowPasswordModal(true);
+  }, []);
+
+  // 验证密码并删除记录
+  const confirmDeleteWithPassword = useCallback(async () => {
+    if (!recordToDelete) return;
+    
+    if (passwordToDelete !== 'u01xhaby') {
+      alert('密码错误！');
+      return;
+    }
+
+    if (!confirm('确定要删除这条记录吗？此操作不可撤销。')) {
+      return;
+    }
+
+    setShowPasswordModal(false);
+    setDeletingId(recordToDelete);
+    
+    try {
+      const res = await fetch(`/api/inventory-history?id=${recordToDelete}&password=${encodeURIComponent(passwordToDelete)}`, {
+        method: 'DELETE',
+        credentials: 'include'
+      });
+      
+      const data = await res.json().catch(() => ({}));
+      
+      if (!res.ok || data?.error) {
+        throw new Error(data?.error || '删除失败');
+      }
+      
+      // 重新加载历史记录
+      await loadHistories();
+      
+      // 显示成功消息
+      alert('记录已删除');
+    } catch (e: any) {
+      alert(`删除失败: ${e?.message || '未知错误'}`);
+    } finally {
+      setDeletingId(null);
+      setRecordToDelete(null);
+    }
+  }, [recordToDelete, passwordToDelete, loadHistories]);
+
+  // 取消删除
+  const cancelDelete = useCallback(() => {
+    setShowPasswordModal(false);
+    setPasswordToDelete('');
+    setRecordToDelete(null);
+  }, []);
+
   // 初始化加载
   useEffect(() => {
     loadHistories();
-  }, [loadHistories]);
+    getCurrentUser();
+  }, [loadHistories, getCurrentUser]);
 
   // 过滤历史记录
   const filteredHistories = histories.filter(history => {
@@ -330,26 +408,47 @@ export default function InventoryHistoryPage() {
                       记录时间: {formatDate(history.create_date)}
                     </div>
                   </div>
-                  <div style={{
-                    background: history.scan_rate >= 80 ? '#f0fdf4' : history.scan_rate >= 60 ? '#fefce8' : '#fef2f2',
-                    border: `1px solid ${history.scan_rate >= 80 ? '#bbf7d0' : history.scan_rate >= 60 ? '#fde047' : '#fecaca'}`,
-                    borderRadius: 6,
-                    padding: '8px 12px',
-                    textAlign: 'center',
-                  }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div style={{
-                      fontSize: 18,
-                      fontWeight: 600,
-                      color: history.scan_rate >= 80 ? '#059669' : history.scan_rate >= 60 ? '#ca8a04' : '#dc2626',
+                      background: history.scan_rate >= 80 ? '#f0fdf4' : history.scan_rate >= 60 ? '#fefce8' : '#fef2f2',
+                      border: `1px solid ${history.scan_rate >= 80 ? '#bbf7d0' : history.scan_rate >= 60 ? '#fde047' : '#fecaca'}`,
+                      borderRadius: 6,
+                      padding: '8px 12px',
+                      textAlign: 'center',
                     }}>
-                      {history.scan_rate}%
+                      <div style={{
+                        fontSize: 18,
+                        fontWeight: 600,
+                        color: history.scan_rate >= 80 ? '#059669' : history.scan_rate >= 60 ? '#ca8a04' : '#dc2626',
+                      }}>
+                        {history.scan_rate}%
+                      </div>
+                      <div style={{
+                        fontSize: 12,
+                        color: '#6b7280',
+                      }}>
+                        扫码率
+                      </div>
                     </div>
-                    <div style={{
-                      fontSize: 12,
-                      color: '#6b7280',
-                    }}>
-                      扫码率
-                    </div>
+                    
+                    {/* 删除按钮 - 所有人都能看到，但需要密码 */}
+                    <button
+                      onClick={() => showDeletePasswordModal(history.id)}
+                      disabled={deletingId === history.id}
+                      style={{
+                        padding: '8px 12px',
+                        borderRadius: 6,
+                        border: '1px solid #dc2626',
+                        background: deletingId === history.id ? '#fca5a5' : '#fff',
+                        color: '#dc2626',
+                        fontSize: 12,
+                        fontWeight: 500,
+                        cursor: deletingId === history.id ? 'not-allowed' : 'pointer',
+                        opacity: deletingId === history.id ? 0.6 : 1,
+                      }}
+                    >
+                      {deletingId === history.id ? '删除中...' : '删除'}
+                    </button>
                   </div>
                 </div>
                 
@@ -385,6 +484,111 @@ export default function InventoryHistoryPage() {
           </div>
         )}
       </div>
+
+      {/* 密码输入模态框 */}
+      {showPasswordModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: 12,
+            padding: 24,
+            minWidth: 320,
+            maxWidth: 400,
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          }}>
+            <h3 style={{
+              fontSize: 18,
+              fontWeight: 600,
+              color: '#111827',
+              marginBottom: 16,
+              textAlign: 'center',
+            }}>
+              确认删除
+            </h3>
+            
+            <p style={{
+              fontSize: 14,
+              color: '#6b7280',
+              marginBottom: 20,
+              textAlign: 'center',
+            }}>
+              请输入删除密码以确认删除此记录
+            </p>
+            
+            <input
+              type="password"
+              value={passwordToDelete}
+              onChange={(e) => setPasswordToDelete(e.target.value)}
+              placeholder="请输入删除密码"
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                borderRadius: 8,
+                border: '1px solid #d1d5db',
+                fontSize: 14,
+                marginBottom: 20,
+                boxSizing: 'border-box',
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  confirmDeleteWithPassword();
+                } else if (e.key === 'Escape') {
+                  cancelDelete();
+                }
+              }}
+              autoFocus
+            />
+            
+            <div style={{
+              display: 'flex',
+              gap: 12,
+              justifyContent: 'center',
+            }}>
+              <button
+                onClick={cancelDelete}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: 8,
+                  border: '1px solid #d1d5db',
+                  background: '#fff',
+                  color: '#374151',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={confirmDeleteWithPassword}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: '#dc2626',
+                  color: '#fff',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

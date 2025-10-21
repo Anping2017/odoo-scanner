@@ -1,6 +1,6 @@
 // /app/api/inventory-history/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getBaseFromCookie, getDbFromCookie, getSessionId, rpc } from '@/app/api/_odoo';
+import { getBaseFromCookie, getDbFromCookie, getSessionId, getLoginUser, rpc } from '@/app/api/_odoo';
 
 export const dynamic = 'force-dynamic';
 
@@ -163,5 +163,58 @@ export async function POST(req: NextRequest) {
   } catch (e: any) {
     console.error('保存盘点历史失败:', e);
     return NextResponse.json({ error: e?.message || '保存历史记录失败' }, { status: 500 });
+  }
+}
+
+// 删除盘点历史记录
+export async function DELETE(req: NextRequest) {
+  try {
+    const base = getBaseFromCookie(req);
+    const db = getDbFromCookie(req);
+    const sessionId = getSessionId(req);
+
+    if (!base || !db || !sessionId) {
+      return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+    const password = searchParams.get('password');
+
+    if (!id) {
+      return NextResponse.json({ error: 'Missing record ID' }, { status: 400 });
+    }
+
+    // 验证删除密码
+    if (password !== 'u01xhaby') {
+      return NextResponse.json({ error: 'Invalid password' }, { status: 403 });
+    }
+
+    console.log('准备删除盘点历史记录:', id);
+
+    const result = await rpc('/web/dataset/call_kw', {
+      model: 'inventory.history_8070',
+      method: 'unlink',
+      args: [[parseInt(id)]],
+      kwargs: {}
+    }, sessionId, base);
+
+    console.log('删除盘点历史响应:', result);
+
+    return NextResponse.json({
+      success: true,
+      deleted: result,
+      message: '记录已删除'
+    });
+
+  } catch (e: any) {
+    console.error('删除盘点历史失败:', e);
+    return NextResponse.json({
+      error: e?.message || 'Failed to delete inventory history',
+      details: {
+        message: e?.message,
+        stack: e?.stack
+      }
+    }, { status: 500 });
   }
 }

@@ -153,8 +153,8 @@ export default function DeviceInventoryPage() {
     const durationMinutes = Math.round((Date.now() - inventoryStartTime) / 60000);
     const scanRate = inventoryStats.totalCount > 0 ? Math.round((inventoryStats.scanCount / inventoryStats.totalCount) * 100) : 0;
     
-    // 获取门店信息
-    let storeName = '默认门店';
+    // 获取公司信息
+    let storeName = '默认公司';
     
     try {
       const userRes = await fetch('/api/user-info', {
@@ -165,11 +165,11 @@ export default function DeviceInventoryPage() {
       if (userRes.ok) {
         const userData = await userRes.json();
         if (userData.success) {
-          storeName = userData.company_name || '默认门店';
+          storeName = userData.company_name || '默认公司';
         }
       }
     } catch (e) {
-      console.warn('获取门店信息失败，使用默认值:', e);
+      console.warn('获取公司信息失败，使用默认值:', e);
     }
     
     const historyData = {
