@@ -149,6 +149,22 @@ export default function DeviceInventoryPage() {
     });
   }, []);
 
+  // 结束盘点
+  const handleEndInventory = useCallback(() => {
+    setIsInventoryMode(false);
+    setScanning(false);
+    setSelectedDevices(new Set());
+    setFilteredDevices(devices);
+  }, [devices]);
+
+  // 自动结束盘点
+  const autoEndInventory = useCallback(() => {
+    setTimeout(() => {
+      showMessage('所有设备盘点完成，自动结束盘点');
+      handleEndInventory();
+    }, 2000); // 延迟2秒让用户看到完成提示
+  }, [showMessage, handleEndInventory]);
+
   // 扫码处理
   const handleDetected = useCallback((code: string) => {
     if (!isInventoryMode) return;
@@ -178,6 +194,11 @@ export default function DeviceInventoryPage() {
         setScanResult(prev => ({ ...prev, show: false }));
         // 设置扫码完成状态
         setScanCompleted(true);
+        
+        // 检查是否所有设备都已盘点完成（选择后剩余设备为0）
+        if (filteredDevices.length === 1) {
+          autoEndInventory();
+        }
       }, 1500);
     } else {
       // 在操作提示框中显示未找到设备的消息
@@ -185,7 +206,7 @@ export default function DeviceInventoryPage() {
       // 设置扫码完成状态
       setScanCompleted(true);
     }
-  }, [isInventoryMode, devices, showMessage]);
+  }, [isInventoryMode, devices, showMessage, recordOperation, autoEndInventory]);
 
   // 处理扫码提示框按钮
   const handleScanResultAction = useCallback(() => {
@@ -243,7 +264,12 @@ export default function DeviceInventoryPage() {
     setFilteredDevices(prev => prev.filter(d => d.id !== deviceId));
     // 记录操作
     recordOperation('manual', 'add', deviceId, device.product_name);
-  }, [isInventoryMode, devices, recordOperation]);
+    
+    // 检查是否所有设备都已盘点完成（选择后剩余设备为0）
+    if (filteredDevices.length === 1) {
+      autoEndInventory();
+    }
+  }, [isInventoryMode, devices, recordOperation, autoEndInventory]);
 
   // 开始盘点
   const handleStartInventory = useCallback(() => {
@@ -252,14 +278,6 @@ export default function DeviceInventoryPage() {
     setSelectedDevices(new Set());
     setFilteredDevices(devices);
     setScanCompleted(false); // 重置扫码完成状态
-  }, [devices]);
-
-  // 结束盘点
-  const handleEndInventory = useCallback(() => {
-    setIsInventoryMode(false);
-    setScanning(false);
-    setSelectedDevices(new Set());
-    setFilteredDevices(devices);
   }, [devices]);
 
   // 重新扫码
@@ -310,7 +328,7 @@ export default function DeviceInventoryPage() {
               cursor: 'pointer',
             }}
           >
-            重新加载...
+            重新加载
           </button>
         </div>
       </div>
@@ -451,6 +469,35 @@ export default function DeviceInventoryPage() {
 
       {/* 搜索区域和统计信息 */}
       <div style={{ padding: '0 16px 16px', marginTop: 24 }}>
+        {/* 最后设备警告提示 */}
+        {isInventoryMode && filteredDevices.length === 1 && (
+          <div style={{
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: 8,
+            padding: '12px 16px',
+            marginBottom: 16,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}>
+            <div style={{
+              fontSize: 16,
+              color: '#dc2626',
+            }}>
+              ⚠️
+            </div>
+            <div style={{
+              fontSize: 14,
+              color: '#dc2626',
+              fontWeight: 500,
+              flex: 1,
+            }}>
+              还剩最后一个设备，盘点完成后将自动结束盘点
+            </div>
+          </div>
+        )}
+        
         {/* 消息提示框 - 在手动搜索上方 */}
         {toast.show && (
           <div style={{
@@ -551,7 +598,17 @@ export default function DeviceInventoryPage() {
         }}>
           <span>总设备: {devices.length}</span>
           <span>剩余: {filteredDevices.length}</span>
-          {isInventoryMode && <span>已选: {selectedDevices.size}</span>}
+          {isInventoryMode && (
+            <>
+              <span>已选: {selectedDevices.size}</span>
+              <span style={{ 
+                color: filteredDevices.length === 1 ? '#dc2626' : '#6b7280',
+                fontWeight: filteredDevices.length === 1 ? 600 : 400
+              }}>
+                进度: {Math.round((selectedDevices.size / devices.length) * 100)}%
+              </span>
+            </>
+          )}
         </div>
       </div>
 
