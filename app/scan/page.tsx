@@ -316,7 +316,7 @@ export default function ScanPage() {
         <div style={{ display: 'flex', gap: 8 }}>
           <button
             onClick={() => window.location.href = '/device-inventory'}
-            style={{ 
+            style={{
               padding: '8px 12px', 
               borderRadius: 8, 
               border: '1px solid #e5e7eb', 
@@ -327,6 +327,20 @@ export default function ScanPage() {
             }}
           >
             设备盘点
+          </button>
+          <button
+            onClick={() => window.location.href = '/receiving'}
+            style={{
+              padding: '8px 12px', 
+              borderRadius: 8, 
+              border: '1px solid #e5e7eb', 
+              background: '#fff',
+              color: '#374151',
+              fontWeight: 500,
+              fontSize: 14,
+            }}
+          >
+            收货入库
           </button>
           <button
             onClick={handleRescan}

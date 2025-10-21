@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react';
 export type DomainPreset = { key: string; label: string; url: string; db: string };
 
 const PRESETS: DomainPreset[] = [
-  { key: 'moboplus.co.nz', label: 'https://moboplus.co.nz', url: 'https://moboplus.co.nz', db: 'odoo' },
+  { key: 'moboplus.co.nz', label: 'https://moboplus.co.nz', url: 'https://moboplus.co.nz', db: 'test' },
   { key: 'repair.raytech.co.nz', label: 'https://repair.raytech.co.nz', url: 'https://repair.raytech.co.nz', db: 'db-raytech-repair' },
 ];
+
 
 type Props = {
   initialKey?: string;

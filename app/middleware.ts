@@ -30,5 +30,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/scan', '/device-inventory'],
+  matcher: ['/', '/scan', '/device-inventory', '/receiving/:path*'],
 };

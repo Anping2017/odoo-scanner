@@ -310,7 +310,7 @@ export default function DeviceInventoryPage() {
               cursor: 'pointer',
             }}
           >
-            重新加载
+            重新加载...
           </button>
         </div>
       </div>

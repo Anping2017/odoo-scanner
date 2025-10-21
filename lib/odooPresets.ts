@@ -4,7 +4,7 @@ export type HostPreset = { url: string; db: string; defaultLocationId?: number }
 export const HOST_PRESETS: Record<string, HostPreset> = {
   'moboplus.co.nz': {
     url: 'https://moboplus.co.nz',
-    db: 'odoo',
+    db: 'test',
     defaultLocationId: 1, // TODO: 替换成真实 Internal 库位ID
   },
   'repair.raytech.co.nz': {
