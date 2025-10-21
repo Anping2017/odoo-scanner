@@ -73,6 +73,9 @@ export default function DeviceInventoryPage() {
   
   // 结束盘点确认弹窗状态
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  
+  // 盘点完成弹窗状态
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
 
   // 加载设备列表
   const loadDevices = useCallback(async () => {
@@ -160,10 +163,10 @@ export default function DeviceInventoryPage() {
   // 自动结束盘点
   const autoEndInventory = useCallback(() => {
     setTimeout(() => {
-      showMessage('所有设备盘点完成，自动结束盘点');
+      setShowCompleteModal(true);
       handleEndInventory();
-    }, 2000); // 延迟2秒让用户看到完成提示
-  }, [showMessage, handleEndInventory]);
+    }, 1000); // 延迟1秒让用户看到完成提示
+  }, [handleEndInventory]);
 
   // 扫码处理
   const handleDetected = useCallback((code: string) => {
@@ -867,6 +870,7 @@ export default function DeviceInventoryPage() {
                 onClick={() => {
                   handleEndInventory();
                   setShowEndConfirm(false);
+                  setShowCompleteModal(true);
                 }}
                 style={{
                   padding: '12px 24px',
@@ -883,6 +887,89 @@ export default function DeviceInventoryPage() {
                 确认结束
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      
+      {/* 盘点完成弹窗 */}
+      {showCompleteModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: 12,
+            padding: 24,
+            maxWidth: 400,
+            width: '90%',
+            textAlign: 'center',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          }}>
+            {/* 成功图标 */}
+            <div style={{
+              width: 64,
+              height: 64,
+              borderRadius: '50%',
+              background: '#10b981',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px',
+            }}>
+              <div style={{
+                fontSize: 32,
+                color: '#fff',
+              }}>
+                ✓
+              </div>
+            </div>
+            
+            {/* 标题 */}
+            <div style={{
+              fontSize: 18,
+              fontWeight: 600,
+              marginBottom: 8,
+              color: '#059669',
+            }}>
+              盘点完成！
+            </div>
+            
+            {/* 内容 */}
+            <div style={{
+              fontSize: 14,
+              color: '#6b7280',
+              marginBottom: 24,
+              lineHeight: 1.5,
+            }}>
+              所有设备盘点已完成，共盘点 {devices.length} 个设备
+            </div>
+            
+            {/* 按钮 */}
+            <button
+              onClick={() => setShowCompleteModal(false)}
+              style={{
+                padding: '12px 24px',
+                borderRadius: 8,
+                border: 'none',
+                background: '#059669',
+                color: '#fff',
+                fontWeight: 500,
+                fontSize: 16,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              确定
+            </button>
           </div>
         </div>
       )}
