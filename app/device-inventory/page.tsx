@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import Scanner from '@/components/Scanner';
 
 type DeviceItem = {
@@ -30,6 +30,13 @@ export default function DeviceInventoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // 操作员信息状态
+  const [operatorName, setOperatorName] = useState('');
+  const [showOperatorInput, setShowOperatorInput] = useState(false);
+  const [operatorSuggestions, setOperatorSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   
   // 扫码提示框状态
   const [scanResult, setScanResult] = useState<{
@@ -71,11 +78,18 @@ export default function DeviceInventoryPage() {
   // 扫码器重新渲染键
   const [scannerKey, setScannerKey] = useState(0);
   
-  // 结束盘点确认弹窗状态
-  const [showEndConfirm, setShowEndConfirm] = useState(false);
-  
   // 盘点完成弹窗状态
   const [showCompleteModal, setShowCompleteModal] = useState(false);
+  
+  // 统计信息状态
+  const [inventoryStats, setInventoryStats] = useState({
+    scanCount: 0,    // 扫码选择数量
+    manualCount: 0,  // 手动选择数量
+    totalCount: 0    // 总选择数量
+  });
+  
+  // 盘点开始时间
+  const [inventoryStartTime, setInventoryStartTime] = useState<number | null>(null);
 
   // 加载设备列表
   const loadDevices = useCallback(async () => {
@@ -113,10 +127,114 @@ export default function DeviceInventoryPage() {
     setFilteredDevices(filtered);
   }, [devices, searchTerm]);
 
+  // 结束盘点
+  const handleEndInventory = useCallback(() => {
+    setIsInventoryMode(false);
+    setScanning(false);
+    setSelectedDevices(new Set());
+    setFilteredDevices(devices);
+    setOperatorName(''); // 重置操作员名称
+    setInventoryStartTime(null); // 重置开始时间
+  }, [devices]);
+
+  // 显示消息提示（不支持撤销）
+  const showMessage = useCallback((message: string) => {
+    setToast({
+      show: true,
+      message,
+      canUndo: false,
+    });
+  }, []);
+
+  // 保存盘点历史记录
+  const saveInventoryHistory = useCallback(async () => {
+    if (!inventoryStartTime) return;
+    
+    const durationMinutes = Math.round((Date.now() - inventoryStartTime) / 60000);
+    const scanRate = inventoryStats.totalCount > 0 ? Math.round((inventoryStats.scanCount / inventoryStats.totalCount) * 100) : 0;
+    
+    // 获取门店信息
+    let storeName = '默认门店';
+    
+    try {
+      const userRes = await fetch('/api/user-info', {
+        method: 'GET',
+        credentials: 'include',
+      });
+      
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        if (userData.success) {
+          storeName = userData.company_name || '默认门店';
+        }
+      }
+    } catch (e) {
+      console.warn('获取门店信息失败，使用默认值:', e);
+    }
+    
+    const historyData = {
+      store_name: storeName,
+      user_name: operatorName || '', // 使用输入的操作员名称
+      inventory_date: new Date().toISOString().replace('T', ' ').replace('Z', '').split('.')[0], // 转换为 Odoo 格式: YYYY-MM-DD HH:MM:SS
+      total_devices: devices.length,
+      scan_count: inventoryStats.scanCount,
+      manual_count: inventoryStats.manualCount,
+      scan_rate: scanRate,
+      duration_minutes: durationMinutes,
+      notes: `自动盘点完成，扫码率: ${scanRate}%`
+    };
+
+    console.log('准备保存盘点历史:', historyData);
+
+    try {
+      const res = await fetch('/api/inventory-history', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(historyData),
+      });
+      
+      const data = await res.json().catch(() => ({}));
+      console.log('保存盘点历史响应:', { status: res.status, data });
+      
+      if (res.ok && data.success) {
+        console.log('盘点历史记录已保存:', data.id);
+        showMessage(`盘点历史已保存 (ID: ${data.id})`);
+      } else {
+        console.error('保存盘点历史失败:', data.error);
+        showMessage(`保存失败: ${data.error || '未知错误'}`);
+      }
+    } catch (e: any) {
+      console.error('保存盘点历史失败:', e);
+      showMessage(`保存失败: ${e?.message || '网络错误'}`);
+    }
+  }, [inventoryStartTime, inventoryStats, devices.length, showMessage]);
+
+  // 自动结束盘点
+  const autoEndInventory = useCallback(() => {
+    console.log('autoEndInventory 被调用');
+    setTimeout(() => {
+      console.log('显示完成弹窗');
+      setShowCompleteModal(true);
+      // 保存盘点历史记录
+      saveInventoryHistory();
+      // 立即结束盘点，不需要延迟
+      handleEndInventory();
+    }, 1000); // 延迟1秒让用户看到完成提示
+  }, [handleEndInventory, saveInventoryHistory]);
+
   // 初始化加载
   useEffect(() => {
     loadDevices();
   }, [loadDevices]);
+
+  // 监听filteredDevices变化，检查是否所有设备都已盘点完成
+  useEffect(() => {
+    if (isInventoryMode && filteredDevices.length === 0 && devices.length > 0) {
+      console.log('useEffect检测到所有设备盘点完成');
+      autoEndInventory();
+    }
+  }, [isInventoryMode, filteredDevices.length, devices.length, autoEndInventory]);
 
   // 记录操作历史
   const recordOperation = useCallback((type: 'scan' | 'manual', action: 'add' | 'remove', deviceId: number, deviceName: string) => {
@@ -132,6 +250,15 @@ export default function DeviceInventoryPage() {
     
     setOperationHistory(prev => [operation, ...prev.slice(0, 9)]); // 保留最近10条记录
     
+    // 更新统计信息（只统计添加操作）
+    if (action === 'add') {
+      setInventoryStats(prev => ({
+        scanCount: type === 'scan' ? prev.scanCount + 1 : prev.scanCount,
+        manualCount: type === 'manual' ? prev.manualCount + 1 : prev.manualCount,
+        totalCount: prev.totalCount + 1
+      }));
+    }
+    
     // 显示提示
     const actionText = action === 'add' ? '已盘点' : '已移除';
     const typeText = type === 'scan' ? '扫码' : '手动';
@@ -142,31 +269,6 @@ export default function DeviceInventoryPage() {
       operationId,
     });
   }, [devices]);
-
-  // 显示消息提示（不支持撤销）
-  const showMessage = useCallback((message: string) => {
-    setToast({
-      show: true,
-      message,
-      canUndo: false,
-    });
-  }, []);
-
-  // 结束盘点
-  const handleEndInventory = useCallback(() => {
-    setIsInventoryMode(false);
-    setScanning(false);
-    setSelectedDevices(new Set());
-    setFilteredDevices(devices);
-  }, [devices]);
-
-  // 自动结束盘点
-  const autoEndInventory = useCallback(() => {
-    setTimeout(() => {
-      setShowCompleteModal(true);
-      handleEndInventory();
-    }, 1000); // 延迟1秒让用户看到完成提示
-  }, [handleEndInventory]);
 
   // 扫码处理
   const handleDetected = useCallback((code: string) => {
@@ -197,11 +299,6 @@ export default function DeviceInventoryPage() {
         setScanResult(prev => ({ ...prev, show: false }));
         // 设置扫码完成状态
         setScanCompleted(true);
-        
-        // 检查是否所有设备都已盘点完成（选择后剩余设备为0）
-        if (filteredDevices.length === 1) {
-          autoEndInventory();
-        }
       }, 1500);
     } else {
       // 在操作提示框中显示未找到设备的消息
@@ -247,6 +344,15 @@ export default function DeviceInventoryPage() {
     // 从历史中移除这个操作
     setOperationHistory(prev => prev.filter(op => op.id !== operationId));
     
+    // 更新统计信息（撤销添加操作时减少计数）
+    if (operation.action === 'add') {
+      setInventoryStats(prev => ({
+        scanCount: operation.type === 'scan' ? prev.scanCount - 1 : prev.scanCount,
+        manualCount: operation.type === 'manual' ? prev.manualCount - 1 : prev.manualCount,
+        totalCount: prev.totalCount - 1
+      }));
+    }
+    
     // 更新提示框消息
     setToast(prev => ({ 
       ...prev, 
@@ -267,21 +373,128 @@ export default function DeviceInventoryPage() {
     setFilteredDevices(prev => prev.filter(d => d.id !== deviceId));
     // 记录操作
     recordOperation('manual', 'add', deviceId, device.product_name);
-    
-    // 检查是否所有设备都已盘点完成（选择后剩余设备为0）
-    if (filteredDevices.length === 1) {
-      autoEndInventory();
-    }
-  }, [isInventoryMode, devices, recordOperation, autoEndInventory]);
+  }, [isInventoryMode, devices, recordOperation]);
 
-  // 开始盘点
-  const handleStartInventory = useCallback(() => {
+  // 获取历史操作员姓名
+  const loadOperatorSuggestions = useCallback(async () => {
+    try {
+      const res = await fetch('/api/operator-names', {
+        method: 'GET',
+        credentials: 'include',
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setOperatorSuggestions(data.operators || []);
+        }
+      }
+    } catch (e) {
+      console.warn('获取历史操作员姓名失败:', e);
+    }
+  }, []);
+
+  // 过滤操作员建议
+  const filteredSuggestions = useMemo(() => {
+    if (!operatorName.trim()) return operatorSuggestions;
+    return operatorSuggestions.filter(name => 
+      name.toLowerCase().includes(operatorName.toLowerCase())
+    );
+  }, [operatorSuggestions, operatorName]);
+
+  // 处理操作员输入变化
+  const handleOperatorNameChange = useCallback((value: string) => {
+    setOperatorName(value);
+    setShowSuggestions(value.trim().length > 0);
+    setSelectedSuggestionIndex(-1);
+  }, []);
+
+  // 选择建议
+  const selectSuggestion = useCallback((suggestion: string) => {
+    setOperatorName(suggestion);
+    setShowSuggestions(false);
+    setSelectedSuggestionIndex(-1);
+  }, []);
+
+  // 确认操作员信息并开始盘点
+  const handleConfirmOperator = useCallback(() => {
+    if (!operatorName.trim()) {
+      showMessage('请输入操作员姓名');
+      return;
+    }
+    
+    // 处理操作员姓名：首字母大写
+    const formattedOperatorName = operatorName.trim()
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+    
+    // 保存格式化后的操作员姓名
+    setOperatorName(formattedOperatorName);
+    
     setIsInventoryMode(true);
     setScanning(true);
     setSelectedDevices(new Set());
     setFilteredDevices(devices);
     setScanCompleted(false); // 重置扫码完成状态
-  }, [devices]);
+    setShowOperatorInput(false); // 隐藏操作员输入框
+    
+    // 重置统计信息
+    setInventoryStats({
+      scanCount: 0,
+      manualCount: 0,
+      totalCount: 0
+    });
+    
+    // 记录开始时间
+    setInventoryStartTime(Date.now());
+    
+    showMessage(`开始盘点 - 操作员: ${formattedOperatorName}`);
+  }, [operatorName, devices, showMessage]);
+
+  // 处理键盘事件
+  const handleOperatorKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!showSuggestions || filteredSuggestions.length === 0) {
+      if (e.key === 'Enter') {
+        handleConfirmOperator();
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => 
+          prev < filteredSuggestions.length - 1 ? prev + 1 : 0
+        );
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => 
+          prev > 0 ? prev - 1 : filteredSuggestions.length - 1
+        );
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (selectedSuggestionIndex >= 0) {
+          selectSuggestion(filteredSuggestions[selectedSuggestionIndex]);
+        } else {
+          handleConfirmOperator();
+        }
+        break;
+      case 'Escape':
+        setShowSuggestions(false);
+        setSelectedSuggestionIndex(-1);
+        break;
+    }
+  }, [showSuggestions, filteredSuggestions, selectedSuggestionIndex, selectSuggestion, handleConfirmOperator]);
+
+  // 开始盘点
+  const handleStartInventory = useCallback(() => {
+    // 显示操作员输入框并加载历史操作员姓名
+    setShowOperatorInput(true);
+    loadOperatorSuggestions();
+  }, [loadOperatorSuggestions]);
 
   // 重新扫码
   const handleRescan = useCallback(() => {
@@ -371,6 +584,20 @@ export default function DeviceInventoryPage() {
             >
               返回
             </button>
+            <button
+              onClick={() => window.location.href = '/inventory-history'}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 8,
+                border: '1px solid #e5e7eb',
+                background: '#fff',
+                color: '#374151',
+                fontWeight: 500,
+                fontSize: 14,
+              }}
+            >
+              盘点历史
+            </button>
             {!isInventoryMode ? (
               <button
                 onClick={handleStartInventory}
@@ -388,7 +615,11 @@ export default function DeviceInventoryPage() {
               </button>
             ) : (
               <button
-                onClick={() => setShowEndConfirm(true)}
+                onClick={() => {
+                  setShowCompleteModal(true);
+                  saveInventoryHistory();
+                  handleEndInventory();
+                }}
                 style={{
                   padding: '8px 12px',
                   borderRadius: 8,
@@ -605,6 +836,12 @@ export default function DeviceInventoryPage() {
             <>
               <span>已选: {selectedDevices.size}</span>
               <span style={{ 
+                color: inventoryStats.scanCount > inventoryStats.manualCount ? '#059669' : '#dc2626',
+                fontWeight: 600
+              }}>
+                扫码: {inventoryStats.scanCount} | 手动: {inventoryStats.manualCount}
+              </span>
+              <span style={{ 
                 color: filteredDevices.length === 1 ? '#dc2626' : '#6b7280',
                 fontWeight: filteredDevices.length === 1 ? 600 : 400
               }}>
@@ -782,8 +1019,8 @@ export default function DeviceInventoryPage() {
         </div>
       )}
       
-      {/* 结束盘点确认弹窗 */}
-      {showEndConfirm && (
+      {/* 操作员输入弹窗 */}
+      {showOperatorInput && (
         <div style={{
           position: 'fixed',
           top: 0,
@@ -794,7 +1031,7 @@ export default function DeviceInventoryPage() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 1000,
+          zIndex: 9999,
         }}>
           <div style={{
             background: '#fff',
@@ -805,55 +1042,74 @@ export default function DeviceInventoryPage() {
             textAlign: 'center',
             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
           }}>
-            {/* 图标 */}
-            <div style={{
-              width: 64,
-              height: 64,
-              borderRadius: '50%',
-              background: '#fef2f2',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 16px',
-            }}>
-              <div style={{
-                fontSize: 32,
-                color: '#dc2626',
-              }}>
-                ⚠️
-              </div>
-            </div>
-            
-            {/* 标题 */}
-            <div style={{
+            <h3 style={{
+              margin: '0 0 16px 0',
               fontSize: 18,
               fontWeight: 600,
-              marginBottom: 8,
-              color: '#374151',
+              color: '#111827',
             }}>
-              确认结束盘点
-            </div>
+              请输入操作员姓名
+            </h3>
             
-            {/* 内容 */}
-            <div style={{
-              fontSize: 14,
-              color: '#6b7280',
-              marginBottom: 24,
-              lineHeight: 1.5,
-            }}>
-              确定要结束当前盘点吗？
-            </div>
-            
-            {/* 按钮 */}
-            <div style={{
-              display: 'flex',
-              gap: 12,
-              justifyContent: 'center',
-            }}>
-              <button
-                onClick={() => setShowEndConfirm(false)}
+            <div style={{ position: 'relative', marginBottom: 20 }}>
+              <input
+                type="text"
+                value={operatorName}
+                onChange={(e) => handleOperatorNameChange(e.target.value)}
+                onKeyDown={handleOperatorKeyDown}
+                placeholder="请输入操作员姓名"
                 style={{
-                  padding: '12px 24px',
+                  width: '100%',
+                  padding: '12px 16px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: 8,
+                  fontSize: 16,
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+                autoFocus
+              />
+              
+              {/* 自动完成建议列表 */}
+              {showSuggestions && filteredSuggestions.length > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  background: '#fff',
+                  border: '1px solid #d1d5db',
+                  borderTop: 'none',
+                  borderRadius: '0 0 8px 8px',
+                  maxHeight: 200,
+                  overflowY: 'auto',
+                  zIndex: 1000,
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                }}>
+                  {filteredSuggestions.map((suggestion, index) => (
+                    <div
+                      key={suggestion}
+                      onClick={() => selectSuggestion(suggestion)}
+                      style={{
+                        padding: '8px 16px',
+                        cursor: 'pointer',
+                        backgroundColor: index === selectedSuggestionIndex ? '#f3f4f6' : 'transparent',
+                        borderBottom: index < filteredSuggestions.length - 1 ? '1px solid #f3f4f6' : 'none',
+                      }}
+                      onMouseEnter={() => setSelectedSuggestionIndex(index)}
+                    >
+                      {suggestion}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              <button
+                onClick={() => setShowOperatorInput(false)}
+                style={{
+                  padding: '10px 20px',
                   borderRadius: 8,
                   border: '1px solid #d1d5db',
                   background: '#fff',
@@ -861,36 +1117,30 @@ export default function DeviceInventoryPage() {
                   fontWeight: 500,
                   fontSize: 14,
                   cursor: 'pointer',
-                  transition: 'all 0.2s ease',
                 }}
               >
                 取消
               </button>
               <button
-                onClick={() => {
-                  handleEndInventory();
-                  setShowEndConfirm(false);
-                  setShowCompleteModal(true);
-                }}
+                onClick={handleConfirmOperator}
                 style={{
-                  padding: '12px 24px',
+                  padding: '10px 20px',
                   borderRadius: 8,
                   border: 'none',
-                  background: '#dc2626',
+                  background: '#059669',
                   color: '#fff',
                   fontWeight: 500,
                   fontSize: 14,
                   cursor: 'pointer',
-                  transition: 'all 0.2s ease',
                 }}
               >
-                确认结束
+                确认开始
               </button>
             </div>
           </div>
         </div>
       )}
-      
+
       {/* 盘点完成弹窗 */}
       {showCompleteModal && (
         <div style={{
@@ -903,7 +1153,7 @@ export default function DeviceInventoryPage() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 1000,
+          zIndex: 9999,
         }}>
           <div style={{
             background: '#fff',
@@ -951,6 +1201,60 @@ export default function DeviceInventoryPage() {
               lineHeight: 1.5,
             }}>
               所有设备盘点已完成，共盘点 {devices.length} 个设备
+            </div>
+            
+            {/* 统计信息 */}
+            <div style={{
+              background: '#f8fafc',
+              borderRadius: 8,
+              padding: 16,
+              marginBottom: 24,
+              border: '1px solid #e5e7eb',
+            }}>
+              <div style={{
+                fontSize: 16,
+                fontWeight: 600,
+                color: '#374151',
+                marginBottom: 12,
+                textAlign: 'center',
+              }}>
+                盘点统计
+              </div>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginBottom: 8,
+              }}>
+                <span style={{ color: '#6b7280' }}>扫码选择:</span>
+                <span style={{ fontWeight: 600, color: '#059669' }}>{inventoryStats.scanCount}</span>
+              </div>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                marginBottom: 8,
+              }}>
+                <span style={{ color: '#6b7280' }}>手动选择:</span>
+                <span style={{ fontWeight: 600, color: '#dc2626' }}>{inventoryStats.manualCount}</span>
+              </div>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                borderTop: '1px solid #e5e7eb',
+                paddingTop: 8,
+              }}>
+                <span style={{ color: '#374151', fontWeight: 600 }}>总计:</span>
+                <span style={{ fontWeight: 600, color: '#374151' }}>{inventoryStats.totalCount}</span>
+              </div>
+              {inventoryStats.totalCount > 0 && (
+                <div style={{
+                  marginTop: 8,
+                  fontSize: 12,
+                  color: '#6b7280',
+                  textAlign: 'center',
+                }}>
+                  扫码率: {Math.round((inventoryStats.scanCount / inventoryStats.totalCount) * 100)}%
+                </div>
+              )}
             </div>
             
             {/* 按钮 */}

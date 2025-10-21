@@ -7,7 +7,7 @@ const ALLOW_INSECURE_TLS = process.env.ALLOW_INSECURE_TLS === '1';
 const httpAgent = new http.Agent({ keepAlive: true });
 const httpsAgent = new https.Agent({ keepAlive: true, rejectUnauthorized: !ALLOW_INSECURE_TLS });
 
-const ALLOWED = (process.env.ODOO_ALLOWED_BASES || '')
+const ALLOWED = (process.env.ODOO_ALLOWED_BASES || 'http://localhost:8069,https://moboplus.co.nz,https://repair.raytech.co.nz')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
@@ -27,13 +27,23 @@ export function getCookie(req: NextRequest, name: string) {
   return m ? decodeURIComponent(m[1]) : '';
 }
 
-export function getSessionId(req: NextRequest) {
-  return getCookie(req, 'od_session');
-}
-
 export function getBaseFromCookie(req: NextRequest) {
   const b = getCookie(req, 'od_base');
-  if (!b || !isAllowedBase(b)) throw new Error('Odoo base missing or not allowed');
+  console.log('Cookie debug:', {
+    cookie: req.headers.get('cookie'),
+    od_base: b,
+    isAllowed: b ? isAllowedBase(b) : false,
+    allowedBases: ALLOWED
+  });
+  
+  if (!b) {
+    throw new Error('Odoo base missing - please login first');
+  }
+  
+  if (!isAllowedBase(b)) {
+    throw new Error(`Odoo base not allowed: ${b}. Allowed bases: ${ALLOWED.join(', ')}`);
+  }
+  
   return b.replace(/\/+$/, '');
 }
 
@@ -72,6 +82,14 @@ export async function rpc(path: string, payload: any, sessionId: string, baseUrl
   } catch (e: any) {
     throw new Error(`Fetch to Odoo failed: ${e?.message || e}`);
   }
+}
+
+export function getSessionId(req: NextRequest): string | undefined {
+  return getCookie(req, 'od_session');
+}
+
+export function getLoginUser(req: NextRequest): string | undefined {
+  return getCookie(req, 'od_user');
 }
 
 export { ODOO_LOCATION_ID };

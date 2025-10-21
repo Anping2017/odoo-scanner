@@ -12,6 +12,11 @@ export const HOST_PRESETS: Record<string, HostPreset> = {
     db: 'db-raytech-repair',
     defaultLocationId: 1, // TODO: 替换成真实 Internal 库位ID
   },
+  'localhost:8069': {
+    url: 'http://localhost:8069',
+    db: 'test-odoo2',
+    defaultLocationId: 1, // TODO: 替换成真实 Internal 库位ID
+  },
 };
 
 // 环境变量兜底：在服务器上设置 ODOO_URL / ODOO_DB（以及可选 ODOO_LOCATION_ID）
@@ -34,6 +39,7 @@ export function resolvePreset(hostRaw?: string): HostPreset | undefined {
   if (h.endsWith('moboplus.co.nz')) return HOST_PRESETS['moboplus.co.nz'];
   if (h.endsWith('repair.raytech.co.nz') || h === 'raytech.co.nz')
     return HOST_PRESETS['repair.raytech.co.nz'];
+  if (h === 'localhost') return HOST_PRESETS['localhost:8069'];
 
   // 回退到环境变量
   return ENV_FALLBACK;

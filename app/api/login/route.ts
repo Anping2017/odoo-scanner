@@ -91,6 +91,7 @@ export async function POST(req: NextRequest) {
     res.cookies.set('od_session', session_id, { ...common, httpOnly: true });
     res.cookies.set('od_base', base, { ...common, httpOnly: false });
     res.cookies.set('od_db', db, { ...common, httpOnly: false });
+    res.cookies.set('od_user', login, { ...common, httpOnly: false }); // 保存登录用户名
     if (companyId) {
       res.cookies.set('od_company', String(companyId), { ...common, httpOnly: false });
     }

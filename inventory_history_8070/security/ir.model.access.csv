@@ -1,0 +1,2 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_inventory_history_8070_user,inventory.history_8070.user,model_inventory_history_8070,base.group_user,1,1,1,1
