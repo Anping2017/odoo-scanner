@@ -125,6 +125,28 @@ export default function LoginPage() {
         >
           {submitting ? '登录中…' : '登录'}
         </button>
+
+        {/* 回收功能入口 */}
+        <div style={{ marginTop: 20, textAlign: 'center' }}>
+          <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>或</div>
+          <button
+            type="button"
+            onClick={() => window.location.href = '/recycle'}
+            style={{
+              width: '100%',
+              padding: '12px 14px',
+              borderRadius: 10,
+              border: '1px solid #e5e7eb',
+              background: '#fff',
+              color: '#111827',
+              cursor: 'pointer',
+              fontWeight: 600,
+              letterSpacing: 0.3,
+            }}
+          >
+            设备回收 (无需登录)
+          </button>
+        </div>
       </form>
     </div>
   );

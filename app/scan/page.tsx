@@ -320,9 +320,9 @@ export default function ScanPage() {
               padding: '8px 12px', 
               borderRadius: 8, 
               border: '1px solid #e5e7eb', 
-              background: '#fff',
-              color: '#374151',
-              fontWeight: 500,
+              background: '#fff', 
+              color: '#374151', 
+              fontWeight: 500, 
               fontSize: 14,
             }}
           >

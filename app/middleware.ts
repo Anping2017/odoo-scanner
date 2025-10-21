@@ -26,9 +26,14 @@ export function middleware(req: NextRequest) {
     }
   }
 
+  // 回收页面不需要认证，允许直接访问
+  if (pathname.startsWith('/recycle')) {
+    return NextResponse.next();
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/', '/scan', '/device-inventory', '/receiving/:path*'],
+  matcher: ['/', '/scan', '/device-inventory', '/receiving/:path*', '/recycle'],
 };
