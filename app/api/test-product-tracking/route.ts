@@ -124,8 +124,8 @@ export async function GET(req: NextRequest) {
       products: productsWithTracking,
       summary: {
         totalProducts: productsWithTracking.length,
-        needsTracking: productsWithTracking.filter(p => p.needsLotSerial).length,
-        noTracking: productsWithTracking.filter(p => !p.needsLotSerial).length
+        needsTracking: productsWithTracking.filter((p: any) => p.needsLotSerial).length,
+        noTracking: productsWithTracking.filter((p: any) => !p.needsLotSerial).length
       },
       debug: {
         base,

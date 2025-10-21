@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
           error: result?.error,
           result: result?.result
         };
-      } catch (e) {
+      } catch (e: any) {
         results[method] = {
           success: false,
           error: e?.message || 'Unknown error'
