@@ -118,7 +118,7 @@ export default function DeviceRecyclePage() {
   const brands = ['苹果', '三星', '华为', '小米', 'OPPO', 'vivo', '联想', '戴尔', '惠普', '华硕', '其他'];
   const conditions = ['几乎全新', '轻微磨损', '需要维修', '拆配件'];
   const idTypes = ['护照', '驾驶证', '其他'];
-  const stores = ['Moboplus', 'Birkenhead', 'BrownsBay', 'Avondale'];
+  const stores = ['Moboplus', 'Birkenhead', 'BrownsBay', 'Avondale', 'Raytech'];
   const bankTypes = [
     'ANZ Bank',
     'ASB Bank', 
@@ -195,6 +195,141 @@ export default function DeviceRecyclePage() {
     }));
   };
 
+  // 中英文映射函数
+  const translateToEnglish = (chineseValue: string, mapping: Record<string, string>): string => {
+    return mapping[chineseValue] || chineseValue;
+  };
+
+  // 转换设备信息为英文
+  const convertDeviceInfoToEnglish = (info: DeviceInfo): DeviceInfo => {
+    const deviceTypeMap: Record<string, string> = {
+      '手机': 'Phone',
+      '平板': 'Tablet',
+      '笔记本': 'Laptop',
+      '其他': 'Other'
+    };
+
+    const brandMap: Record<string, string> = {
+      '苹果': 'Apple',
+      '三星': 'Samsung',
+      '华为': 'Huawei',
+      '小米': 'Xiaomi',
+      'OPPO': 'OPPO',
+      'vivo': 'vivo',
+      '联想': 'Lenovo',
+      '戴尔': 'Dell',
+      '惠普': 'HP',
+      '华硕': 'ASUS',
+      '其他': 'Other'
+    };
+
+    const simCardTypeMap: Record<string, string> = {
+      'Nano SIM': 'Nano SIM',
+      'Micro SIM': 'Micro SIM',
+      '标准SIM': 'Standard SIM',
+      'eSIM': 'eSIM',
+      'Nano SIM + eSIM': 'Nano SIM + eSIM',
+      'Micro SIM + eSIM': 'Micro SIM + eSIM',
+      'Nano SIM + Nano SIM': 'Nano SIM + Nano SIM',
+      'Micro SIM + Nano SIM': 'Micro SIM + Nano SIM',
+      'eSIM + eSIM': 'eSIM + eSIM',
+      'Nano SIM + Nano SIM + eSIM': 'Nano SIM + Nano SIM + eSIM',
+      'Micro SIM + Micro SIM': 'Micro SIM + Micro SIM',
+      '三卡槽 (双SIM + 存储卡)': 'Triple Slot (Dual SIM + SD Card)',
+      '无SIM卡': 'No SIM Card'
+    };
+
+    const networkTypeMap: Record<string, string> = {
+      '4G': '4G',
+      '5G': '5G',
+      'WiFi': 'WiFi',
+      'WiFi+Cellular': 'WiFi+Cellular',
+      '其他': 'Other'
+    };
+
+    const cpuCountMap: Record<string, string> = {
+      '单核': 'Single Core',
+      '双核': 'Dual Core',
+      '四核': 'Quad Core',
+      '六核': 'Hexa Core',
+      '八核': 'Octa Core',
+      '十核': 'Deca Core',
+      '十二核': 'Dodeca Core',
+      '十六核': 'Hexadeca Core',
+      '其他': 'Other'
+    };
+
+    const accessoryMap: Record<string, string> = {
+      '充电器': 'Charger',
+      '数据线': 'Cable',
+      '耳机': 'Earphones',
+      '保护壳': 'Case',
+      '包装盒': 'Box',
+      '说明书': 'Manual'
+    };
+
+    return {
+      ...info,
+      deviceType: translateToEnglish(info.deviceType, deviceTypeMap),
+      brand: translateToEnglish(info.brand, brandMap),
+      simCardType: info.simCardType ? translateToEnglish(info.simCardType, simCardTypeMap) : '',
+      networkType: info.networkType ? translateToEnglish(info.networkType, networkTypeMap) : '',
+      cpuCount: info.cpuCount ? translateToEnglish(info.cpuCount, cpuCountMap) : '',
+      accessories: info.accessories.map(acc => translateToEnglish(acc, accessoryMap))
+    };
+  };
+
+  // 转换用户信息为英文
+  const convertUserInfoToEnglish = (info: UserInfo): UserInfo => {
+    const idTypeMap: Record<string, string> = {
+      '护照': 'Passport',
+      '驾驶证': 'Driver License',
+      '其他': 'Other'
+    };
+
+    return {
+      ...info,
+      idType: info.idType ? translateToEnglish(info.idType, idTypeMap) : ''
+    };
+  };
+
+  // 转换检测信息为英文
+  const convertInspectionInfoToEnglish = (info: InspectionInfo): InspectionInfo => {
+    const conditionMap: Record<string, string> = {
+      '几乎全新': 'Like New',
+      '轻微磨损': 'Good',
+      '需要维修': 'Need repair',
+      '拆配件': 'For Parts'
+    };
+
+    const replacementPartMap: Record<string, string> = {
+      '屏幕': 'Screen',
+      '电池': 'Battery',
+      '充电接口': 'Charging Port',
+      '扬声器': 'Speaker',
+      '摄像头': 'Camera',
+      '按键': 'Button',
+      '主板': 'Motherboard',
+      '内存': 'Memory',
+      '硬盘': 'Hard Drive',
+      '键盘': 'Keyboard',
+      '触摸板': 'Touchpad',
+      '风扇': 'Fan',
+      '散热器': 'Heat Sink',
+      '外壳': 'Case',
+      '后盖': 'Back Cover',
+      '天线': 'Antenna',
+      '麦克风': 'Microphone',
+      '其他': 'Other'
+    };
+
+    return {
+      ...info,
+      condition: translateToEnglish(info.condition, conditionMap),
+      replacementParts: info.replacementParts.map(part => translateToEnglish(part, replacementPartMap))
+    };
+  };
+
   const handleSubmit = useCallback(async () => {
     // 防止重复提交
     if (isSubmitting) {
@@ -205,6 +340,13 @@ export default function DeviceRecyclePage() {
       setIsSubmitting(true);
       console.log('提交回收信息:', { deviceInfo, userInfo, inspectionInfo });
 
+      // 转换为英文数据
+      const englishDeviceInfo = convertDeviceInfoToEnglish(deviceInfo);
+      const englishUserInfo = convertUserInfoToEnglish(userInfo);
+      const englishInspectionInfo = convertInspectionInfoToEnglish(inspectionInfo);
+
+      console.log('转换后的英文数据:', { englishDeviceInfo, englishUserInfo, englishInspectionInfo });
+
       // 推送到Raytech Odoo
       const response = await fetch('/api/push-to-raytech', {
         method: 'POST',
@@ -212,9 +354,9 @@ export default function DeviceRecyclePage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          deviceInfo,
-          userInfo,
-          inspectionInfo
+          deviceInfo: englishDeviceInfo,
+          userInfo: englishUserInfo,
+          inspectionInfo: englishInspectionInfo
         }),
       });
 
@@ -1317,7 +1459,7 @@ export default function DeviceRecyclePage() {
                 background: '#eff6ff' 
               }}>
                 <h3 style={{ fontSize: 16, fontWeight: 600, color: '#1d4ed8', margin: '0 0 16px 0' }}>
-                  🏦 付款银行信息
+                  🏦 付款银行信息（可选）
                 </h3>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1479,6 +1621,26 @@ export default function DeviceRecyclePage() {
                 </div>
               </div>
 
+              {/* 回收价格 */}
+              <div>
+                <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 8 }}>
+                  回收价格 *
+                </label>
+                <input
+                  type="text"
+                  value={inspectionInfo.estimatedValue}
+                  onChange={(e) => handleInspectionInfoChange('estimatedValue', e.target.value)}
+                  placeholder="请输入回收价格"
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    borderRadius: 8,
+                    border: '1px solid #d1d5db',
+                    fontSize: 14
+                  }}
+                />
+              </div>
+
               {/* 成色 */}
               <div>
                 <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 8 }}>
@@ -1551,25 +1713,6 @@ export default function DeviceRecyclePage() {
                   />
                 </div>
               )}
-
-              <div>
-                <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 8 }}>
-                  回收价格 *
-                </label>
-                <input
-                  type="text"
-                  value={inspectionInfo.estimatedValue}
-                  onChange={(e) => handleInspectionInfoChange('estimatedValue', e.target.value)}
-                  placeholder="请输入回收价格"
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    borderRadius: 8,
-                    border: '1px solid #d1d5db',
-                    fontSize: 14
-                  }}
-                />
-              </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 8 }}>
