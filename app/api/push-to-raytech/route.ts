@@ -423,9 +423,6 @@ async function getProductId(productCode: string, deviceInfo: any, userInfo: any,
     if (!productIds || productIds.length === 0) {
       console.log('产品不存在，创建新产品...');
       
-      // 获取回收价格
-      const recyclePrice = parseFloat(inspectionInfo.estimatedValue) || 0;
-      
       // 构建产品描述：品牌 + 型号
       const productDescription = `${deviceInfo.brand || ''} ${deviceInfo.model || ''}`.trim();
       
@@ -434,13 +431,11 @@ async function getProductId(productCode: string, deviceInfo: any, userInfo: any,
         default_code: productCode,
         type: 'service',
         categ_id: 1,
-        list_price: recyclePrice, // 设置回收价格
         description: productDescription // 设置产品描述
       };
       
       const productId = await raytechRpcCall('product.product', 'create', [productData]);
       console.log('创建产品成功:', productId);
-      console.log('设置回收价格:', recyclePrice);
       console.log('设置产品描述:', productDescription);
       return productId;
     }
@@ -448,23 +443,12 @@ async function getProductId(productCode: string, deviceInfo: any, userInfo: any,
     const productId = productIds[0];
     console.log('找到现有产品，ID:', productId);
     
-    // 更新产品的回收价格和描述
-    const recyclePrice = parseFloat(inspectionInfo.estimatedValue) || 0;
-    const productDescription = `${deviceInfo.brand || ''} ${deviceInfo.model || ''}`.trim();
-    
-    const updateData: any = {};
-    if (recyclePrice > 0) {
-      updateData.list_price = recyclePrice;
-    }
-    if (productDescription) {
-      updateData.description = productDescription;
-    }
-    
-    if (Object.keys(updateData).length > 0) {
-      console.log('更新产品信息:', updateData);
-      await raytechRpcCall('product.product', 'write', [productId, updateData]);
-      console.log('产品信息更新成功');
-    }
+    // 不再更新产品价格，价格只在采购订单行中设置
+    // 如果需要更新产品描述，可以取消下面的注释
+    // const productDescription = `${deviceInfo.brand || ''} ${deviceInfo.model || ''}`.trim();
+    // if (productDescription) {
+    //   await raytechRpcCall('product.product', 'write', [productId, { description: productDescription }]);
+    // }
     
     return productId;
   } catch (error) {
