@@ -461,94 +461,94 @@ async function getProductId(productCode: string, deviceInfo: any, userInfo: any,
 function buildLogNote(deviceInfo: any, userInfo: any, inspectionInfo: any): string {
   const sections = [];
   
-  // 字段名映射
+  // 字段名映射（英文标签）
   const fieldMap: { [key: string]: string } = {
     // 设备信息字段
-    deviceType: '设备类型',
-    brand: '品牌',
-    model: '型号',
+    deviceType: 'Device Type',
+    brand: 'Brand',
+    model: 'Model',
     imei: 'IMEI',
-    serialNumber: '序列号',
-    color: '颜色',
-    storage: '存储容量',
-    accessories: '配件',
-    batteryHealth: '电池健康度',
-    memory: '内存',
-    screenSize: '屏幕大小',
-    simCardType: 'Sim卡类型',
-    networkType: '网络类型',
-    releaseYear: '发布年份',
-    cpuDescription: 'CPU补充描述',
-    memoryType: '内存类型',
-    storageType: '硬盘类型',
+    serialNumber: 'Serial Number',
+    color: 'Color',
+    storage: 'Storage',
+    accessories: 'Accessories',
+    batteryHealth: 'Battery Health',
+    memory: 'Memory',
+    screenSize: 'Screen Size',
+    simCardType: 'SIM Card Type',
+    networkType: 'Network Type',
+    releaseYear: 'Release Year',
+    cpuDescription: 'CPU Description',
+    memoryType: 'Memory Type',
+    storageType: 'Storage Type',
     gpu: 'GPU',
-    cpuCount: 'CPU数量',
-    cpuModel: 'CPU型号',
-    cpuSpeed: 'CPU速度',
-    storageSize: '硬盘大小',
-    memorySize: '内存大小',
-    deviceDescription: '设备描述',
-    brandDescription: '其他品牌描述',
-    condition: '成色',
+    cpuCount: 'CPU Count',
+    cpuModel: 'CPU Model',
+    cpuSpeed: 'CPU Speed',
+    storageSize: 'Storage Size',
+    memorySize: 'Memory Size',
+    deviceDescription: 'Device Description',
+    brandDescription: 'Other Brand Description',
+    condition: 'Condition',
     
     // 用户信息字段
-    customerName: '客户姓名',
-    phone: '电话',
-    email: '邮箱',
-    address: '地址',
-    customerPhone: '客户电话',
-    customerEmail: '客户邮箱',
-    customerAddress: '客户地址',
-    bankType: '银行类型',
-    accountName: '账户名称',
-    accountNumber: '付款账号',
-    otherBankName: '其他银行名称',
-    transferNote: '汇款备注',
-    idType: '证件类型',
-    idNumber: '证件号码',
-    idDescription: '证件描述',
+    customerName: 'Customer Name',
+    phone: 'Phone',
+    email: 'Email',
+    address: 'Address',
+    customerPhone: 'Customer Phone',
+    customerEmail: 'Customer Email',
+    customerAddress: 'Customer Address',
+    bankType: 'Bank Type',
+    accountName: 'Account Name',
+    accountNumber: 'Account Number',
+    otherBankName: 'Other Bank Name',
+    transferNote: 'Transfer Note',
+    idType: 'ID Type',
+    idNumber: 'ID Number',
+    idDescription: 'ID Description',
     
     // 检测信息字段
-    store: '门店',
-    operator: '操作人',
-    estimatedValue: '回收价',
-    notes: '备注',
-    replacementParts: '更换配件',
-    suggestedReplacements: '建议更换配件',
-    partDescription: '配件描述'
+    store: 'Store',
+    operator: 'Operator',
+    estimatedValue: 'Estimated Value',
+    notes: 'Notes',
+    replacementParts: 'Replacement Parts',
+    suggestedReplacements: 'Suggested Replacements',
+    partDescription: 'Part Description'
   };
   
   // 设备信息
-  sections.push('📱 设备信息:');
+  sections.push('📱 Device Info:');
   Object.entries(deviceInfo).forEach(([key, value]) => {
     if (value && value !== '') {
-      const chineseKey = fieldMap[key] || key;
+      const englishKey = fieldMap[key] || key;
       if (Array.isArray(value)) {
-        sections.push(`${chineseKey}: ${value.join(', ')}`);
+        sections.push(`${englishKey}: ${value.join(', ')}`);
       } else {
-        sections.push(`${chineseKey}: ${value}`);
+        sections.push(`${englishKey}: ${value}`);
       }
     }
   });
   
   // 用户信息
-  sections.push('----------👤 用户信息:');
+  sections.push('----------👤 User Info:');
   Object.entries(userInfo).forEach(([key, value]) => {
     if (value && value !== '') {
-      const chineseKey = fieldMap[key] || key;
-      sections.push(`${chineseKey}: ${value}`);
+      const englishKey = fieldMap[key] || key;
+      sections.push(`${englishKey}: ${value}`);
     }
   });
   
   // 检测信息
-  sections.push('----------🔍 检测信息:');
+  sections.push('----------🔍 Inspection Info:');
   Object.entries(inspectionInfo).forEach(([key, value]) => {
     if (value && value !== '') {
-      const chineseKey = fieldMap[key] || key;
+      const englishKey = fieldMap[key] || key;
       if (Array.isArray(value)) {
-        sections.push(`${chineseKey}: ${value.join(', ')}`);
+        sections.push(`${englishKey}: ${value.join(', ')}`);
       } else {
-        sections.push(`${chineseKey}: ${value}`);
+        sections.push(`${englishKey}: ${value}`);
       }
     }
   });
