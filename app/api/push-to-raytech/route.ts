@@ -511,7 +511,7 @@ function buildLogNote(deviceInfo: any, userInfo: any, inspectionInfo: any): stri
     // 检测信息字段
     store: 'Store',
     operator: 'Operator',
-    estimatedValue: 'Estimated Value',
+    estimatedValue: 'Recycle Price',
     notes: 'Notes',
     replacementParts: 'Replacement Parts',
     suggestedReplacements: 'Suggested Replacements',

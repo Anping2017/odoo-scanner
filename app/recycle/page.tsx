@@ -456,7 +456,16 @@ export default function DeviceRecyclePage() {
         
         return basicValid;
       case 2:
-        // 用户信息全部为选填，只需要验证条件性字段
+        // 客户姓名必填
+        if (!userInfo.customerName || userInfo.customerName.trim() === '') {
+          return false;
+        }
+        // 电话和邮箱至少必填一项
+        const hasPhone = userInfo.phone && userInfo.phone.trim() !== '';
+        const hasEmail = userInfo.email && userInfo.email.trim() !== '';
+        if (!hasPhone && !hasEmail) {
+          return false;
+        }
         // 如果选择了证件类型，需要证件号码
         if (userInfo.idType && userInfo.idType !== '' && !userInfo.idNumber) {
           return false;
@@ -1309,7 +1318,7 @@ export default function DeviceRecyclePage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 8 }}>
-                  客户姓名
+                  客户姓名 *
                 </label>
                 <input
                   type="text"
@@ -1329,7 +1338,7 @@ export default function DeviceRecyclePage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 8 }}>
-                    手机号码
+                    手机号码 <span style={{ color: '#ef4444' }}>*</span>
                   </label>
                   <input
                     type="tel"
@@ -1348,7 +1357,7 @@ export default function DeviceRecyclePage() {
 
                 <div>
                   <label style={{ display: 'block', fontSize: 14, fontWeight: 500, color: '#374151', marginBottom: 8 }}>
-                    邮箱地址
+                    邮箱地址 <span style={{ color: '#ef4444' }}>*</span>
                   </label>
                   <input
                     type="email"
@@ -1364,6 +1373,9 @@ export default function DeviceRecyclePage() {
                     }}
                   />
                 </div>
+              </div>
+              <div style={{ fontSize: 12, color: '#6b7280', marginTop: -12 }}>
+                手机号码和邮箱地址至少填写一项
               </div>
 
               <div>
