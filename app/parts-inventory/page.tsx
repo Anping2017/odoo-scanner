@@ -1339,7 +1339,11 @@ export default function PartsInventoryPage() {
         <div style={{ textAlign: 'center' }}>
           <div style={{ fontSize: 18, color: '#dc2626', marginBottom: 16 }}>{error}</div>
           <button
-            onClick={loadParts}
+            onClick={() => {
+              if (selectedCategory && (selectedCategory === 'Parts' || selectedCategory === 'Accessories')) {
+                loadParts(currentPage, apiSearchTerm, selectedCategory);
+              }
+            }}
             style={{
               padding: '12px 24px',
               borderRadius: 8,
