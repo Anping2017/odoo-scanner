@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
 
     const posCategories = posCategoryData?.result || [];
     const categoryIds = posCategories.map((cat: any) => cat.id);
-    const categoryMap = new Map(posCategories.map((cat: any) => [cat.id, cat.name]));
+    const categoryMap = new Map<number, string>(posCategories.map((cat: any) => [cat.id, cat.name]));
 
     if (categoryIds.length === 0) {
       return NextResponse.json({ 
@@ -467,7 +467,8 @@ export async function GET(req: NextRequest) {
                 } else {
                   // 单个值格式（不太可能，但处理一下）
                   templateCategoryIds = [categoryFieldValue[0]];
-                  categoryName = categoryMap.get(templateCategoryIds[0]) || '未分类';
+                  const categoryId = templateCategoryIds[0];
+                  categoryName = (categoryId !== undefined ? categoryMap.get(categoryId) : undefined) || '未分类';
                 }
               }
               
@@ -476,7 +477,7 @@ export async function GET(req: NextRequest) {
                 // 优先查找Parts或Accessories类别
                 const partsOrAccessoriesId = templateCategoryIds.find(id => categoryIds.includes(id));
                 if (partsOrAccessoriesId && categoryMap.has(partsOrAccessoriesId)) {
-                  categoryName = categoryMap.get(partsOrAccessoriesId);
+                  categoryName = categoryMap.get(partsOrAccessoriesId) || '未分类';
                 } else if (categoryMap.has(templateCategoryIds[0])) {
                   categoryName = categoryMap.get(templateCategoryIds[0]) || '未分类';
                 }
