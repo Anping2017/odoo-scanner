@@ -51,6 +51,7 @@ export default function PartsInventoryPage() {
   
   // 快捷搜索关键词状态（支持多选）
   const [quickSearchTerms, setQuickSearchTerms] = useState<Set<string>>(new Set());
+  const [showQuickSearch, setShowQuickSearch] = useState(true); // 控制快捷搜索选项的显示/隐藏，默认展开
   
   // 分页状态
   const [currentPage, setCurrentPage] = useState(1);
@@ -741,9 +742,6 @@ export default function PartsInventoryPage() {
     // 记录操作（使用当前操作类型）
     recordOperation(currentOperationType, 'add', currentPartId, part.product_name);
 
-    // 清空搜索
-    setSearchTerm('');
-    
     // 关闭弹窗
     setShowCountInput(false);
     setCurrentPartId(null);
@@ -751,71 +749,6 @@ export default function PartsInventoryPage() {
     setCurrentOperationType('manual'); // 重置为默认值
   }, [currentPartId, inputCount, currentOperationType, parts, recordOperation, showMessage, checkAndAutoEnd]);
 
-  // 一键盘点当前页所有未盘点的零件
-  const handleQuickInventory = useCallback(() => {
-    if (!isInventoryMode) return;
-    
-    // 获取当前页未盘点的零件
-    const unInventoriedParts = filteredParts.filter(part => !selectedParts.has(part.id));
-    
-    if (unInventoriedParts.length === 0) {
-      showMessage('当前页所有零件已盘点完成');
-      return;
-    }
-
-    // 确认操作
-    if (!confirm(`确定要一键盘点当前页的 ${unInventoriedParts.length} 个零件吗？`)) {
-      return;
-    }
-
-    // 批量添加所有未盘点的零件
-    const newSelectedParts = new Set(selectedParts);
-    const newPartsCounts = { ...partsCounts };
-    const operations: Array<{ type: 'scan' | 'manual'; action: 'add'; partId: number; partName: string }> = [];
-
-    unInventoriedParts.forEach(part => {
-      // 添加到已盘点列表
-      newSelectedParts.add(part.id);
-      
-      // 设置数量（使用库存数量作为默认值）
-      newPartsCounts[part.id] = part.quantity;
-      
-      // 记录操作（标记为手动操作）
-      operations.push({
-        type: 'manual',
-        action: 'add',
-        partId: part.id,
-        partName: part.product_name
-      });
-    });
-
-    // 批量更新状态
-    setSelectedParts(newSelectedParts);
-    setPartsCounts(newPartsCounts);
-
-    // 批量更新后立即检查是否完成，传入新的大小
-    setTimeout(() => {
-      checkAndAutoEnd(newSelectedParts.size);
-    }, 100);
-
-    // 批量记录操作并更新统计
-    let newManualCount = inventoryStats.manualCount;
-    let newTotalCount = inventoryStats.totalCount;
-    
-    operations.forEach(operation => {
-      recordOperation(operation.type, operation.action, operation.partId, operation.partName);
-      newManualCount++;
-      newTotalCount++;
-    });
-
-    setInventoryStats(prev => ({
-      scanCount: prev.scanCount,
-      manualCount: newManualCount,
-      totalCount: newTotalCount
-    }));
-
-    showMessage(`已一键盘点 ${unInventoriedParts.length} 个零件`);
-  }, [isInventoryMode, filteredParts, selectedParts, partsCounts, inventoryStats, recordOperation, showMessage, checkAndAutoEnd]);
 
   const addPartDirectly = useCallback((partId: number, operationType: 'scan' | 'manual') => {
     const part = parts.find(p => p.id === partId);
@@ -839,9 +772,6 @@ export default function PartsInventoryPage() {
     
     // 记录操作
     recordOperation(operationType, 'add', partId, part.product_name);
-
-    // 清空搜索
-    setSearchTerm('');
   }, [parts, recordOperation, checkAndAutoEnd]);
 
   // 扫码处理
@@ -1565,6 +1495,10 @@ export default function PartsInventoryPage() {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.5; }
         }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-5px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
       `}} />
       <div style={{
         minHeight: '100dvh',
@@ -1829,27 +1763,6 @@ export default function PartsInventoryPage() {
                 outline: 'none',
               }}
             />
-            {isInventoryMode && (
-              <button
-                onClick={handleQuickInventory}
-                disabled={filteredParts.filter(part => !selectedParts.has(part.id)).length === 0}
-                style={{
-                  padding: '10px 16px',
-                  borderRadius: 6,
-                  border: 'none',
-                  background: filteredParts.filter(part => !selectedParts.has(part.id)).length === 0 ? '#f3f4f6' : '#f59e0b',
-                  color: filteredParts.filter(part => !selectedParts.has(part.id)).length === 0 ? '#9ca3af' : '#fff',
-                  fontSize: 14,
-                  fontWeight: 500,
-                  cursor: filteredParts.filter(part => !selectedParts.has(part.id)).length === 0 ? 'not-allowed' : 'pointer',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                一键盘点
-              </button>
-            )}
             <button
               onClick={() => {
                 setSearchTerm('');
@@ -1920,193 +1833,238 @@ export default function PartsInventoryPage() {
               gap: 12,
               width: '100%',
             }}>
-              {/* 零件类别(Parts)的快捷搜索 */}
-              {selectedCategory === 'Parts' && (
-                <>
-                  {/* 第一类：设备类型 */}
-                  <div style={{
-                    display: 'flex',
-                    gap: 8,
-                    flexWrap: 'wrap',
-                    width: '100%',
-                  }}>
-                    <div style={{ fontSize: 12, color: '#6b7280', width: '100%', marginBottom: 4 }}>设备类型：</div>
-                    {['iPhone', 'iPad', 'Macbook', 'Samsung'].map((term) => {
-                      const isSelected = quickSearchTerms.has(term);
-                      return (
-                        <button
-                          key={term}
-                          onClick={() => toggleQuickSearch(term)}
-                          style={{
-                            padding: '8px 16px',
-                            borderRadius: 6,
-                            border: isSelected ? '2px solid #059669' : '1px solid #e5e7eb',
-                            background: isSelected ? '#ecfdf5' : '#fff',
-                            color: isSelected ? '#059669' : '#374151',
-                            fontSize: 14,
-                            fontWeight: isSelected ? 600 : 500,
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            whiteSpace: 'nowrap',
-                            flex: '1 1 auto',
-                            minWidth: 'fit-content',
-                          }}
-                        >
-                          {term}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  
-                  {/* 第二类：部件类型 */}
-                  <div style={{
-                    display: 'flex',
-                    gap: 8,
-                    flexWrap: 'wrap',
-                    width: '100%',
-                  }}>
-                    <div style={{ fontSize: 12, color: '#6b7280', width: '100%', marginBottom: 4 }}>部件类型：</div>
-                    {['Battery', 'Screen', 'Charging Port', 'Back Cover/Glass'].map((term) => {
-                      // 判断Back Cover/Glass是否被选中（检查相关关键词）
-                      const isBackCoverSelected = term === 'Back Cover/Glass' 
-                        ? ['back cover', 'back glass', 'back glass cover', 'rear cover', 'rear glass'].some(t => quickSearchTerms.has(t))
-                        : quickSearchTerms.has(term);
-                      
-                      return (
-                        <button
-                          key={term}
-                          onClick={() => toggleQuickSearch(term)}
-                          style={{
-                            padding: '8px 16px',
-                            borderRadius: 6,
-                            border: isBackCoverSelected ? '2px solid #059669' : '1px solid #e5e7eb',
-                            background: isBackCoverSelected ? '#ecfdf5' : '#fff',
-                            color: isBackCoverSelected ? '#059669' : '#374151',
-                            fontSize: 14,
-                            fontWeight: isBackCoverSelected ? 600 : 500,
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            whiteSpace: 'nowrap',
-                            flex: '1 1 auto',
-                            minWidth: 'fit-content',
-                          }}
-                        >
-                          {term}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
+              {/* 显示/隐藏快捷搜索的切换按钮 */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 12px',
+                background: '#f9fafb',
+                borderRadius: '8px',
+                border: '1px solid #e5e7eb',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              onClick={() => setShowQuickSearch(!showQuickSearch)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#f3f4f6';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#f9fafb';
+              }}
+              >
+                <span style={{ fontSize: 14, fontWeight: 500, color: '#374151' }}>
+                  快捷搜索选项
+                </span>
+                <span style={{ 
+                  fontSize: 12, 
+                  color: '#6b7280',
+                  transition: 'transform 0.2s ease',
+                  transform: showQuickSearch ? 'rotate(180deg)' : 'rotate(0deg)',
+                  display: 'inline-block',
+                }}>
+                  ▼
+                </span>
+              </div>
               
-              {/* 配件类别(Accessories)的快捷搜索 */}
-              {selectedCategory === 'Accessories' && (
-                <>
-                  {/* 第一类：设备类型 */}
-                  <div style={{
-                    display: 'flex',
-                    gap: 8,
-                    flexWrap: 'wrap',
-                    width: '100%',
-                  }}>
-                    <div style={{ fontSize: 12, color: '#6b7280', width: '100%', marginBottom: 4 }}>设备类型：</div>
-                    {['iPhone', 'iPad', 'Macbook', 'Samsung', 'Oppo', 'Huawei'].map((term) => {
-                      const isSelected = quickSearchTerms.has(term);
-                      return (
-                        <button
-                          key={term}
-                          onClick={() => toggleQuickSearch(term)}
-                          style={{
-                            padding: '8px 16px',
-                            borderRadius: 6,
-                            border: isSelected ? '2px solid #059669' : '1px solid #e5e7eb',
-                            background: isSelected ? '#ecfdf5' : '#fff',
-                            color: isSelected ? '#059669' : '#374151',
-                            fontSize: 14,
-                            fontWeight: isSelected ? 600 : 500,
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            whiteSpace: 'nowrap',
-                            flex: '1 1 auto',
-                            minWidth: 'fit-content',
-                          }}
-                        >
-                          {term}
-                        </button>
-                      );
-                    })}
-                  </div>
+              {/* 快捷搜索按钮区域 - 根据showQuickSearch状态显示/隐藏 */}
+              {showQuickSearch && (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12,
+                  width: '100%',
+                  animation: 'fadeIn 0.2s ease-out',
+                }}>
+                  {/* 零件类别(Parts)的快捷搜索 */}
+                  {selectedCategory === 'Parts' && (
+                    <>
+                      {/* 第一类：设备类型 */}
+                      <div style={{
+                        display: 'flex',
+                        gap: 8,
+                        flexWrap: 'wrap',
+                        width: '100%',
+                      }}>
+                        <div style={{ fontSize: 12, color: '#6b7280', width: '100%', marginBottom: 4 }}>设备类型：</div>
+                        {['iPhone', 'iPad', 'Macbook', 'Samsung'].map((term) => {
+                          const isSelected = quickSearchTerms.has(term);
+                          return (
+                            <button
+                              key={term}
+                              onClick={() => toggleQuickSearch(term)}
+                              style={{
+                                padding: '8px 16px',
+                                borderRadius: 6,
+                                border: isSelected ? '2px solid #059669' : '1px solid #e5e7eb',
+                                background: isSelected ? '#ecfdf5' : '#fff',
+                                color: isSelected ? '#059669' : '#374151',
+                                fontSize: 14,
+                                fontWeight: isSelected ? 600 : 500,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                whiteSpace: 'nowrap',
+                                flex: '1 1 auto',
+                                minWidth: 'fit-content',
+                              }}
+                            >
+                              {term}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* 第二类：部件类型 */}
+                      <div style={{
+                        display: 'flex',
+                        gap: 8,
+                        flexWrap: 'wrap',
+                        width: '100%',
+                      }}>
+                        <div style={{ fontSize: 12, color: '#6b7280', width: '100%', marginBottom: 4 }}>部件类型：</div>
+                        {['Battery', 'Screen', 'Charging Port', 'Back Cover/Glass'].map((term) => {
+                          // 判断Back Cover/Glass是否被选中（检查相关关键词）
+                          const isBackCoverSelected = term === 'Back Cover/Glass' 
+                            ? ['back cover', 'back glass', 'back glass cover', 'rear cover', 'rear glass'].some(t => quickSearchTerms.has(t))
+                            : quickSearchTerms.has(term);
+                          
+                          return (
+                            <button
+                              key={term}
+                              onClick={() => toggleQuickSearch(term)}
+                              style={{
+                                padding: '8px 16px',
+                                borderRadius: 6,
+                                border: isBackCoverSelected ? '2px solid #059669' : '1px solid #e5e7eb',
+                                background: isBackCoverSelected ? '#ecfdf5' : '#fff',
+                                color: isBackCoverSelected ? '#059669' : '#374151',
+                                fontSize: 14,
+                                fontWeight: isBackCoverSelected ? 600 : 500,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                whiteSpace: 'nowrap',
+                                flex: '1 1 auto',
+                                minWidth: 'fit-content',
+                              }}
+                            >
+                              {term}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
                   
-                  {/* 第二类：配件类型 */}
-                  <div style={{
-                    display: 'flex',
-                    gap: 8,
-                    flexWrap: 'wrap',
-                    width: '100%',
-                  }}>
-                    <div style={{ fontSize: 12, color: '#6b7280', width: '100%', marginBottom: 4 }}>配件类型：</div>
-                    {['Case', 'Screen Protector'].map((term) => {
-                      const isSelected = quickSearchTerms.has(term);
-                      return (
-                        <button
-                          key={term}
-                          onClick={() => toggleQuickSearch(term)}
-                          style={{
-                            padding: '8px 16px',
-                            borderRadius: 6,
-                            border: isSelected ? '2px solid #059669' : '1px solid #e5e7eb',
-                            background: isSelected ? '#ecfdf5' : '#fff',
-                            color: isSelected ? '#059669' : '#374151',
-                            fontSize: 14,
-                            fontWeight: isSelected ? 600 : 500,
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            whiteSpace: 'nowrap',
-                            flex: '1 1 auto',
-                            minWidth: 'fit-content',
-                          }}
-                        >
-                          {term}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  
-                  {/* 第三类：品牌/材质 */}
-                  <div style={{
-                    display: 'flex',
-                    gap: 8,
-                    flexWrap: 'wrap',
-                    width: '100%',
-                  }}>
-                    <div style={{ fontSize: 12, color: '#6b7280', width: '100%', marginBottom: 4 }}>品牌/材质：</div>
-                    {['Kemeng', 'OG', 'DUX DUCIS', 'Transparent', 'Silicone'].map((term) => {
-                      const isSelected = quickSearchTerms.has(term);
-                      return (
-                        <button
-                          key={term}
-                          onClick={() => toggleQuickSearch(term)}
-                          style={{
-                            padding: '8px 16px',
-                            borderRadius: 6,
-                            border: isSelected ? '2px solid #059669' : '1px solid #e5e7eb',
-                            background: isSelected ? '#ecfdf5' : '#fff',
-                            color: isSelected ? '#059669' : '#374151',
-                            fontSize: 14,
-                            fontWeight: isSelected ? 600 : 500,
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            whiteSpace: 'nowrap',
-                            flex: '1 1 auto',
-                            minWidth: 'fit-content',
-                          }}
-                        >
-                          {term}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
+                  {/* 配件类别(Accessories)的快捷搜索 */}
+                  {selectedCategory === 'Accessories' && (
+                    <>
+                      {/* 第一类：设备类型 */}
+                      <div style={{
+                        display: 'flex',
+                        gap: 8,
+                        flexWrap: 'wrap',
+                        width: '100%',
+                      }}>
+                        <div style={{ fontSize: 12, color: '#6b7280', width: '100%', marginBottom: 4 }}>设备类型：</div>
+                        {['iPhone', 'iPad', 'Macbook', 'Samsung', 'Oppo', 'Huawei'].map((term) => {
+                          const isSelected = quickSearchTerms.has(term);
+                          return (
+                            <button
+                              key={term}
+                              onClick={() => toggleQuickSearch(term)}
+                              style={{
+                                padding: '8px 16px',
+                                borderRadius: 6,
+                                border: isSelected ? '2px solid #059669' : '1px solid #e5e7eb',
+                                background: isSelected ? '#ecfdf5' : '#fff',
+                                color: isSelected ? '#059669' : '#374151',
+                                fontSize: 14,
+                                fontWeight: isSelected ? 600 : 500,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                whiteSpace: 'nowrap',
+                                flex: '1 1 auto',
+                                minWidth: 'fit-content',
+                              }}
+                            >
+                              {term}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* 第二类：配件类型 */}
+                      <div style={{
+                        display: 'flex',
+                        gap: 8,
+                        flexWrap: 'wrap',
+                        width: '100%',
+                      }}>
+                        <div style={{ fontSize: 12, color: '#6b7280', width: '100%', marginBottom: 4 }}>配件类型：</div>
+                        {['Case', 'Screen Protector'].map((term) => {
+                          const isSelected = quickSearchTerms.has(term);
+                          return (
+                            <button
+                              key={term}
+                              onClick={() => toggleQuickSearch(term)}
+                              style={{
+                                padding: '8px 16px',
+                                borderRadius: 6,
+                                border: isSelected ? '2px solid #059669' : '1px solid #e5e7eb',
+                                background: isSelected ? '#ecfdf5' : '#fff',
+                                color: isSelected ? '#059669' : '#374151',
+                                fontSize: 14,
+                                fontWeight: isSelected ? 600 : 500,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                whiteSpace: 'nowrap',
+                                flex: '1 1 auto',
+                                minWidth: 'fit-content',
+                              }}
+                            >
+                              {term}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* 第三类：品牌/材质 */}
+                      <div style={{
+                        display: 'flex',
+                        gap: 8,
+                        flexWrap: 'wrap',
+                        width: '100%',
+                      }}>
+                        <div style={{ fontSize: 12, color: '#6b7280', width: '100%', marginBottom: 4 }}>品牌/材质：</div>
+                        {['Kemeng', 'OG', 'DUX DUCIS', 'Transparent', 'Silicone'].map((term) => {
+                          const isSelected = quickSearchTerms.has(term);
+                          return (
+                            <button
+                              key={term}
+                              onClick={() => toggleQuickSearch(term)}
+                              style={{
+                                padding: '8px 16px',
+                                borderRadius: 6,
+                                border: isSelected ? '2px solid #059669' : '1px solid #e5e7eb',
+                                background: isSelected ? '#ecfdf5' : '#fff',
+                                color: isSelected ? '#059669' : '#374151',
+                                fontSize: 14,
+                                fontWeight: isSelected ? 600 : 500,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                whiteSpace: 'nowrap',
+                                flex: '1 1 auto',
+                                minWidth: 'fit-content',
+                              }}
+                            >
+                              {term}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
             </div>
           )}

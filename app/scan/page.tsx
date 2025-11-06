@@ -301,16 +301,9 @@ export default function ScanPage() {
             transform: translateX(-50%) translateY(0);
           }
         }
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(10px); }
           to { opacity: 1; transform: translateY(0); }
-        }
-        .scanning-indicator {
-          animation: pulse 2s ease-in-out infinite;
         }
         .card-fade-in {
           animation: fadeIn 0.3s ease-out;
@@ -500,31 +493,7 @@ export default function ScanPage() {
           }}
         >
           {scanning ? (
-            <>
-              <Scanner onDetected={handleDetected} />
-              <div
-                className="scanning-indicator"
-                style={{
-                  position: 'absolute',
-                  top: '12px',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  background: 'rgba(5, 150, 105, 0.9)',
-                  color: '#fff',
-                  padding: '6px 16px',
-                  borderRadius: '20px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  zIndex: 5,
-                }}
-              >
-                <span>●</span>
-                <span>正在扫描...</span>
-              </div>
-            </>
+            <Scanner onDetected={handleDetected} />
           ) : (
             <div
               style={{

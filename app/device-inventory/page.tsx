@@ -49,6 +49,7 @@ export default function DeviceInventoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showQuickSearch, setShowQuickSearch] = useState(true); // 控制快捷搜索选项的显示/隐藏，默认展开
   
   // 操作员信息状态
   const [operatorName, setOperatorName] = useState('');
@@ -667,8 +668,6 @@ export default function DeviceInventoryPage() {
     }
     
     setSelectedDevices(prev => new Set([...prev, deviceId]));
-    // 清空搜索栏，返回所有剩余列表
-    setSearchTerm('');
     // 记录操作
     recordOperation('manual', 'add', deviceId, device.product_name);
   }, [isInventoryMode, devices, selectedDevices, recordOperation]);
@@ -1014,12 +1013,20 @@ export default function DeviceInventoryPage() {
   }
 
   return (
-    <div style={{
-      minHeight: '100dvh',
-      display: 'flex',
-      flexDirection: 'column',
-      background: '#f8fafc',
-    }}>
+    <>
+      {/* CSS动画样式 */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(-5px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}} />
+      <div style={{
+        minHeight: '100dvh',
+        display: 'flex',
+        flexDirection: 'column',
+        background: '#f8fafc',
+      }}>
       {/* 顶部栏 */}
       <div style={{
         position: 'sticky',
@@ -1322,67 +1329,112 @@ export default function DeviceInventoryPage() {
           {/* 快捷搜索按钮 */}
           <div style={{
             display: 'flex',
-            gap: 8,
-            flexWrap: 'wrap',
+            flexDirection: 'column',
+            gap: 12,
             width: '100%',
           }}>
-            <button
-              onClick={() => setSearchTerm(searchTerm === 'iPhone' ? '' : 'iPhone')}
-              style={{
-                padding: '8px 16px',
-                borderRadius: 6,
-                border: '1px solid #e5e7eb',
-                background: searchTerm === 'iPhone' ? '#eff6ff' : '#fff',
-                color: searchTerm === 'iPhone' ? '#2563eb' : '#374151',
-                fontSize: 14,
-                fontWeight: searchTerm === 'iPhone' ? 600 : 500,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap',
-                flex: '1 1 auto',
-                minWidth: 'fit-content',
-              }}
+            {/* 显示/隐藏快捷搜索的切换按钮 */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '8px 12px',
+              background: '#f9fafb',
+              borderRadius: '8px',
+              border: '1px solid #e5e7eb',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+            }}
+            onClick={() => setShowQuickSearch(!showQuickSearch)}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#f3f4f6';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = '#f9fafb';
+            }}
             >
-              iPhone
-            </button>
-            <button
-              onClick={() => setSearchTerm(searchTerm === 'iPad' ? '' : 'iPad')}
-              style={{
-                padding: '8px 16px',
-                borderRadius: 6,
-                border: '1px solid #e5e7eb',
-                background: searchTerm === 'iPad' ? '#eff6ff' : '#fff',
-                color: searchTerm === 'iPad' ? '#2563eb' : '#374151',
-                fontSize: 14,
-                fontWeight: searchTerm === 'iPad' ? 600 : 500,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap',
-                flex: '1 1 auto',
-                minWidth: 'fit-content',
-              }}
-            >
-              iPad
-            </button>
-            <button
-              onClick={() => setSearchTerm(searchTerm === 'Samsung' ? '' : 'Samsung')}
-              style={{
-                padding: '8px 16px',
-                borderRadius: 6,
-                border: '1px solid #e5e7eb',
-                background: searchTerm === 'Samsung' ? '#eff6ff' : '#fff',
-                color: searchTerm === 'Samsung' ? '#2563eb' : '#374151',
-                fontSize: 14,
-                fontWeight: searchTerm === 'Samsung' ? 600 : 500,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap',
-                flex: '1 1 auto',
-                minWidth: 'fit-content',
-              }}
-            >
-              Samsung
-            </button>
+              <span style={{ fontSize: 14, fontWeight: 500, color: '#374151' }}>
+                快捷搜索选项
+              </span>
+              <span style={{ 
+                fontSize: 12, 
+                color: '#6b7280',
+                transition: 'transform 0.2s ease',
+                transform: showQuickSearch ? 'rotate(180deg)' : 'rotate(0deg)',
+                display: 'inline-block',
+              }}>
+                ▼
+              </span>
+            </div>
+            
+            {/* 快捷搜索按钮区域 - 根据showQuickSearch状态显示/隐藏 */}
+            {showQuickSearch && (
+              <div style={{
+                display: 'flex',
+                gap: 8,
+                flexWrap: 'wrap',
+                width: '100%',
+                animation: 'fadeIn 0.2s ease-out',
+              }}>
+                <button
+                  onClick={() => setSearchTerm(searchTerm === 'iPhone' ? '' : 'iPhone')}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 6,
+                    border: '1px solid #e5e7eb',
+                    background: searchTerm === 'iPhone' ? '#eff6ff' : '#fff',
+                    color: searchTerm === 'iPhone' ? '#2563eb' : '#374151',
+                    fontSize: 14,
+                    fontWeight: searchTerm === 'iPhone' ? 600 : 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    whiteSpace: 'nowrap',
+                    flex: '1 1 auto',
+                    minWidth: 'fit-content',
+                  }}
+                >
+                  iPhone
+                </button>
+                <button
+                  onClick={() => setSearchTerm(searchTerm === 'iPad' ? '' : 'iPad')}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 6,
+                    border: '1px solid #e5e7eb',
+                    background: searchTerm === 'iPad' ? '#eff6ff' : '#fff',
+                    color: searchTerm === 'iPad' ? '#2563eb' : '#374151',
+                    fontSize: 14,
+                    fontWeight: searchTerm === 'iPad' ? 600 : 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    whiteSpace: 'nowrap',
+                    flex: '1 1 auto',
+                    minWidth: 'fit-content',
+                  }}
+                >
+                  iPad
+                </button>
+                <button
+                  onClick={() => setSearchTerm(searchTerm === 'Samsung' ? '' : 'Samsung')}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 6,
+                    border: '1px solid #e5e7eb',
+                    background: searchTerm === 'Samsung' ? '#eff6ff' : '#fff',
+                    color: searchTerm === 'Samsung' ? '#2563eb' : '#374151',
+                    fontSize: 14,
+                    fontWeight: searchTerm === 'Samsung' ? 600 : 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    whiteSpace: 'nowrap',
+                    flex: '1 1 auto',
+                    minWidth: 'fit-content',
+                  }}
+                >
+                  Samsung
+                </button>
+              </div>
+            )}
           </div>
         </div>
         
@@ -2011,6 +2063,7 @@ export default function DeviceInventoryPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }
