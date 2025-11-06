@@ -21,6 +21,25 @@ type DeviceItem = {
   scan_key: string;
 };
 
+type InventoryState = {
+  operatorName: string;
+  startDate: string; // 盘点开始日期（ISO格式）
+  selectedDevices: Set<number>;
+  inventoryStats: {
+    scanCount: number;
+    manualCount: number;
+    totalCount: number;
+  };
+  inventoryStartTime: number;
+  totalDevices: number; // 总设备数量
+  operatorParts: Record<string, number[]>; // 记录每个操作员盘点的设备ID列表 {操作员名: [设备ID列表]}
+  operatorDates: Record<string, string>; // 记录每个操作员最后盘点时的日期 {操作员名: YYYY-MM-DD}
+  operatorStartCounts: Record<string, number>; // 记录每个操作员开始盘点时的设备数量 {操作员名: 开始时的数量}
+  companyId?: number; // 公司ID，用于检查公司是否变化
+};
+
+const STORAGE_KEY = 'device_inventory_state';
+
 export default function DeviceInventoryPage() {
   const [devices, setDevices] = useState<DeviceItem[]>([]);
   const [filteredDevices, setFilteredDevices] = useState<DeviceItem[]>([]);
@@ -34,9 +53,18 @@ export default function DeviceInventoryPage() {
   // 操作员信息状态
   const [operatorName, setOperatorName] = useState('');
   const [showOperatorInput, setShowOperatorInput] = useState(false);
+  const [isContinueMode, setIsContinueMode] = useState(false); // 是否是继续盘点模式
   const [operatorSuggestions, setOperatorSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
+  
+  // 盘点开始日期
+  const [inventoryStartDate, setInventoryStartDate] = useState<string | null>(null);
+  
+  // 操作员盘点记录
+  const [operatorParts, setOperatorParts] = useState<Record<string, number[]>>({}); // 记录每个操作员盘点的设备ID列表
+  const [operatorDates, setOperatorDates] = useState<Record<string, string>>({}); // 记录每个操作员最后盘点时的日期
+  const [operatorStartCounts, setOperatorStartCounts] = useState<Record<string, number>>({}); // 记录每个操作员开始盘点时的设备数量
   
   // 扫码提示框状态
   const [scanResult, setScanResult] = useState<{
@@ -81,6 +109,9 @@ export default function DeviceInventoryPage() {
   // 盘点完成弹窗状态
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   
+  // 未完成确认弹窗状态
+  const [showIncompleteConfirmModal, setShowIncompleteConfirmModal] = useState(false);
+  
   // 统计信息状态
   const [inventoryStats, setInventoryStats] = useState({
     scanCount: 0,    // 扫码选择数量
@@ -111,21 +142,132 @@ export default function DeviceInventoryPage() {
     }
   }, []);
 
+  // 获取当前公司ID
+  const getCurrentCompanyId = useCallback((): number | undefined => {
+    try {
+      // 从cookie中获取公司ID
+      const cookies = document.cookie.split(';');
+      const companyCookie = cookies.find(c => c.trim().startsWith('od_company='));
+      if (companyCookie) {
+        const companyId = companyCookie.split('=')[1];
+        return companyId ? Number(companyId) : undefined;
+      }
+    } catch (e) {
+      console.warn('获取公司ID失败:', e);
+    }
+    return undefined;
+  }, []);
+
+  // 保存盘点状态到localStorage
+  const saveInventoryState = useCallback(() => {
+    if (!isInventoryMode || !inventoryStartTime) return;
+    
+    const currentCompanyId = getCurrentCompanyId();
+    
+    // 确保当前操作员的盘点记录被更新
+    const currentOperatorDevices = Array.from(selectedDevices);
+    const updatedOperatorParts = {
+      ...operatorParts, // 保留所有操作员的记录
+      [operatorName]: currentOperatorDevices // 更新当前操作员的记录
+    };
+    
+    const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD格式
+    const updatedOperatorDates = {
+      ...operatorDates, // 保留所有操作员的日期
+      [operatorName]: currentDate // 更新当前操作员的日期
+    };
+    
+    // 确保operatorStartCounts存在（如果当前操作员没有记录，则保持现有逻辑）
+    // 如果当前操作员没有开始数量记录，说明这是第一次保存，应该保持原值（不应覆盖）
+    const updatedOperatorStartCounts = {
+      ...operatorStartCounts, // 保留所有操作员的开始数量
+      // 如果当前操作员没有开始数量记录，不添加（保持原有逻辑，在handleConfirmOperator中已经设置）
+    };
+    
+    const state: InventoryState = {
+      operatorName,
+      startDate: inventoryStartDate || new Date().toISOString().split('T')[0],
+      selectedDevices: new Set(selectedDevices),
+      inventoryStats,
+      inventoryStartTime: inventoryStartTime || Date.now(),
+      totalDevices: devices.length, // 保存总设备数量
+      operatorParts: updatedOperatorParts,
+      operatorDates: updatedOperatorDates,
+      operatorStartCounts: updatedOperatorStartCounts,
+      companyId: currentCompanyId
+    };
+
+    // 将Set转换为数组以便存储
+    const stateToSave = {
+      ...state,
+      selectedDevices: Array.from(state.selectedDevices)
+    };
+
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+    } catch (e) {
+      console.warn('保存盘点状态失败:', e);
+    }
+  }, [isInventoryMode, inventoryStartTime, operatorName, selectedDevices, inventoryStats, inventoryStartDate, devices.length, operatorParts, operatorDates, operatorStartCounts, getCurrentCompanyId]);
+
+  // 加载盘点状态
+  const loadInventoryState = useCallback((): InventoryState | null => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) return null;
+
+      const state = JSON.parse(saved);
+      
+      // 检查公司ID是否变化
+      const currentCompanyId = getCurrentCompanyId();
+      if (state.companyId !== undefined && currentCompanyId !== undefined && state.companyId !== currentCompanyId) {
+        // 公司ID变化了，清除之前的状态
+        console.log('公司ID变化，清除之前的状态:', state.companyId, '->', currentCompanyId);
+        localStorage.removeItem(STORAGE_KEY);
+        return null;
+      }
+      
+      return {
+        ...state,
+        selectedDevices: new Set(state.selectedDevices),
+        totalDevices: state.totalDevices || 0, // 兼容旧状态，如果没有则默认为0
+        operatorParts: state.operatorParts || {}, // 确保operatorParts存在
+        operatorDates: state.operatorDates || {}, // 确保operatorDates存在
+        operatorStartCounts: state.operatorStartCounts || {} // 确保operatorStartCounts存在
+      };
+    } catch (e) {
+      console.warn('加载盘点状态失败:', e);
+      return null;
+    }
+  }, [getCurrentCompanyId]);
+
+  // 清除保存的状态
+  const clearInventoryState = useCallback(() => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      console.warn('清除盘点状态失败:', e);
+    }
+  }, []);
+
   // 搜索过滤
   useEffect(() => {
+    // 首先排除已选择的设备
+    const unselectedDevices = devices.filter(device => !selectedDevices.has(device.id));
+    
     if (!searchTerm.trim()) {
-      setFilteredDevices(devices);
+      setFilteredDevices(unselectedDevices);
       return;
     }
     
-    const filtered = devices.filter(device => 
+    const filtered = unselectedDevices.filter(device => 
       device.product_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       device.product_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
       device.lot_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       device.location_name.toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredDevices(filtered);
-  }, [devices, searchTerm]);
+  }, [devices, searchTerm, selectedDevices]);
 
   // 结束盘点
   const handleEndInventory = useCallback(() => {
@@ -135,7 +277,12 @@ export default function DeviceInventoryPage() {
     setFilteredDevices(devices);
     setOperatorName(''); // 重置操作员名称
     setInventoryStartTime(null); // 重置开始时间
-  }, [devices]);
+    setInventoryStartDate(null); // 重置开始日期
+    setOperatorParts({}); // 清除操作员记录
+    setOperatorDates({}); // 清除操作员日期
+    setOperatorStartCounts({}); // 清除操作员开始数量记录
+    clearInventoryState(); // 清除保存的状态
+  }, [devices, clearInventoryState]);
 
   // 显示消息提示（不支持撤销）
   const showMessage = useCallback((message: string) => {
@@ -149,6 +296,12 @@ export default function DeviceInventoryPage() {
   // 保存盘点历史记录
   const saveInventoryHistory = useCallback(async () => {
     if (!inventoryStartTime) return;
+    
+    // 检查是否完成所有盘点
+    if (selectedDevices.size < devices.length) {
+      console.log('盘点未完成，不保存历史记录');
+      return;
+    }
     
     const durationMinutes = Math.round((Date.now() - inventoryStartTime) / 60000);
     const scanRate = inventoryStats.totalCount > 0 ? Math.round((inventoryStats.scanCount / inventoryStats.totalCount) * 100) : 0;
@@ -181,17 +334,104 @@ export default function DeviceInventoryPage() {
       manual_count: inventoryStats.manualCount,
       scan_rate: scanRate,
       duration_minutes: durationMinutes,
-      notes: `自动盘点完成，扫码率: ${scanRate}%`
+      notes: `Devices | 设备盘点完成，扫码率: ${scanRate}%`
     };
 
-    console.log('准备保存盘点历史:', historyData);
+    // 构建操作员详细信息
+    // 格式：OPERATORS:操作员名1,日期1,数量1|操作员名2,日期2,数量2
+    const operatorDetails: string[] = [];
+    
+    // 首先从localStorage加载最新的状态，确保获取所有操作员的记录
+    const latestSavedState = loadInventoryState();
+    let finalOperatorParts = { ...operatorParts };
+    let finalOperatorStartCounts = { ...operatorStartCounts };
+    let finalOperatorDates = { ...operatorDates };
+    
+    if (latestSavedState) {
+      // 合并保存的状态和当前状态
+      finalOperatorParts = {
+        ...latestSavedState.operatorParts,
+        ...operatorParts,
+        [operatorName]: Array.from(selectedDevices) // 确保当前操作员的记录是最新的
+      };
+      finalOperatorStartCounts = {
+        ...latestSavedState.operatorStartCounts,
+        ...operatorStartCounts
+      };
+      finalOperatorDates = {
+        ...latestSavedState.operatorDates,
+        ...operatorDates,
+        [operatorName]: new Date().toISOString().split('T')[0]
+      };
+    } else {
+      // 如果没有保存的状态，使用当前状态
+      finalOperatorParts = {
+        ...operatorParts,
+        [operatorName]: Array.from(selectedDevices)
+      };
+      finalOperatorDates = {
+        ...operatorDates,
+        [operatorName]: new Date().toISOString().split('T')[0]
+      };
+    }
+    
+    // 确保当前操作员的开始数量被包含
+    if (!(operatorName in finalOperatorStartCounts) && finalOperatorStartCounts[operatorName] !== 0) {
+      // 计算之前操作员的累计数量：所有之前操作员的设备ID数量（去重）
+      const previousDeviceIds = new Set<number>();
+      Object.entries(finalOperatorParts).forEach(([opName, deviceIds]) => {
+        if (opName !== operatorName && Array.isArray(deviceIds)) {
+          deviceIds.forEach(id => previousDeviceIds.add(id));
+        }
+      });
+      finalOperatorStartCounts[operatorName] = previousDeviceIds.size;
+    }
+    
+    // 添加调试日志
+    console.log('操作员记录调试:', {
+      operatorParts: finalOperatorParts,
+      operatorStartCounts: finalOperatorStartCounts,
+      operatorDates: finalOperatorDates,
+      currentOperator: operatorName,
+      selectedDevicesSize: selectedDevices.size,
+      latestSavedState: latestSavedState ? '存在' : '不存在'
+    });
+    
+    // 计算每个操作员各自盘点的设备数量
+    Object.entries(finalOperatorParts).forEach(([opName, deviceIds]) => {
+      if (Array.isArray(deviceIds)) {
+        const startCount = finalOperatorStartCounts[opName] ?? 0; // 该操作员开始盘点时的设备数量
+        const currentCount = deviceIds.length; // 当前该操作员累计的设备数量
+        const operatorCount = currentCount - startCount; // 该操作员实际盘点的设备数量
+        
+        console.log(`操作员 ${opName}: 开始数量=${startCount}, 当前数量=${currentCount}, 实际盘点=${operatorCount}`);
+        
+        if (operatorCount > 0) {
+          const date = finalOperatorDates[opName] || inventoryStartDate || new Date().toISOString().split('T')[0];
+          operatorDetails.push(`${opName},${date},${operatorCount}`);
+        }
+      }
+    });
+    
+    // 构建notes字段
+    let notes = `Devices | 设备盘点完成，扫码率: ${scanRate}%`;
+    if (operatorDetails.length > 0) {
+      notes += ` | OPERATORS:${operatorDetails.join('|')}`;
+    }
+    
+    const historyDataWithOperators = {
+      ...historyData,
+      notes: notes
+    };
+
+    console.log('准备保存盘点历史:', historyDataWithOperators);
 
     try {
       const res = await fetch('/api/inventory-history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(historyData),
+        body: JSON.stringify(historyDataWithOperators),
       });
       
       const data = await res.json().catch(() => ({}));
@@ -208,7 +448,7 @@ export default function DeviceInventoryPage() {
       console.error('保存盘点历史失败:', e);
       showMessage(`保存失败: ${e?.message || '网络错误'}`);
     }
-  }, [inventoryStartTime, inventoryStats, devices.length, showMessage]);
+  }, [inventoryStartTime, inventoryStats, devices.length, selectedDevices.size, operatorParts, operatorDates, operatorStartCounts, inventoryStartDate, operatorName, showMessage, loadInventoryState]);
 
   // 自动结束盘点
   const autoEndInventory = useCallback(() => {
@@ -223,18 +463,66 @@ export default function DeviceInventoryPage() {
     }, 1000); // 延迟1秒让用户看到完成提示
   }, [handleEndInventory, saveInventoryHistory]);
 
+  // 自动保存状态
+  useEffect(() => {
+    if (isInventoryMode) {
+      saveInventoryState();
+    }
+  }, [isInventoryMode, selectedDevices, inventoryStats, saveInventoryState]);
+
+  // 同步更新操作员盘点记录（当selectedDevices变化时）
+  useEffect(() => {
+    if (isInventoryMode && operatorName) {
+      const currentDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD格式
+      setOperatorParts(prev => ({
+        ...prev,
+        [operatorName]: Array.from(selectedDevices)
+      }));
+      // 更新操作员最后盘点日期
+      setOperatorDates(prev => ({
+        ...prev,
+        [operatorName]: currentDate
+      }));
+    }
+  }, [isInventoryMode, operatorName, selectedDevices]);
+
   // 初始化加载
   useEffect(() => {
     loadDevices();
-  }, [loadDevices]);
+    
+    // 检查是否有保存的盘点状态
+    const savedState = loadInventoryState();
+    if (!savedState) {
+      // 如果没有保存的状态，清除所有状态
+      setSelectedDevices(new Set());
+      setInventoryStats({
+        scanCount: 0,
+        manualCount: 0,
+        totalCount: 0
+      });
+      setOperatorName('');
+      setInventoryStartTime(null);
+      setInventoryStartDate(null);
+      setOperatorParts({});
+      setOperatorDates({});
+      setOperatorStartCounts({});
+      setIsInventoryMode(false);
+    } else {
+      // 如果有保存的状态，恢复操作员记录
+      setOperatorParts(savedState.operatorParts || {});
+      setOperatorDates(savedState.operatorDates || {});
+      setOperatorStartCounts(savedState.operatorStartCounts || {});
+    }
+  }, [loadDevices, loadInventoryState]);
 
-  // 监听filteredDevices变化，检查是否所有设备都已盘点完成
+  // 监听selectedDevices变化，检查是否所有设备都已盘点完成
   useEffect(() => {
-    if (isInventoryMode && filteredDevices.length === 0 && devices.length > 0) {
+    // 只有在盘点模式下，且已选择的设备数量等于总设备数量时，才认为盘点完成
+    if (isInventoryMode && selectedDevices.size > 0 && selectedDevices.size === devices.length) {
       console.log('useEffect检测到所有设备盘点完成');
       autoEndInventory();
     }
-  }, [isInventoryMode, filteredDevices.length, devices.length, autoEndInventory]);
+  }, [isInventoryMode, selectedDevices.size, devices.length, autoEndInventory]);
 
   // 记录操作历史
   const recordOperation = useCallback((type: 'scan' | 'manual', action: 'add' | 'remove', deviceId: number, deviceName: string) => {
@@ -280,6 +568,13 @@ export default function DeviceInventoryPage() {
     );
     
     if (matchedDevice) {
+      // 检查设备是否已被选择
+      if (selectedDevices.has(matchedDevice.id)) {
+        showMessage(`设备 ${matchedDevice.product_name} 已盘点，无需重复盘点`);
+        setScanCompleted(true);
+        return;
+      }
+      
       // 显示找到设备的提示
       setScanResult({
         show: true,
@@ -291,8 +586,6 @@ export default function DeviceInventoryPage() {
       // 延迟执行选择操作，让用户看到提示
       setTimeout(() => {
         setSelectedDevices(prev => new Set([...prev, matchedDevice.id]));
-        // 从显示列表中移除
-        setFilteredDevices(prev => prev.filter(d => d.id !== matchedDevice.id));
         // 记录操作
         recordOperation('scan', 'add', matchedDevice.id, matchedDevice.product_name);
         // 隐藏提示框
@@ -306,7 +599,7 @@ export default function DeviceInventoryPage() {
       // 设置扫码完成状态
       setScanCompleted(true);
     }
-  }, [isInventoryMode, devices, showMessage, recordOperation, autoEndInventory]);
+  }, [isInventoryMode, devices, selectedDevices, showMessage, recordOperation]);
 
   // 处理扫码提示框按钮
   const handleScanResultAction = useCallback(() => {
@@ -328,17 +621,17 @@ export default function DeviceInventoryPage() {
     if (!device) return;
     
     if (operation.action === 'add') {
-      // 撤销添加：从已选择中移除，重新显示在列表中
+      // 撤销添加：从已选择中移除
+      // filteredDevices 会通过搜索过滤逻辑自动更新
       setSelectedDevices(prev => {
         const newSet = new Set(prev);
         newSet.delete(operation.deviceId);
         return newSet;
       });
-      setFilteredDevices(prev => [...prev, device]);
     } else {
-      // 撤销移除：重新添加到已选择中，从列表中移除
+      // 撤销移除：重新添加到已选择中
+      // filteredDevices 会通过搜索过滤逻辑自动更新
       setSelectedDevices(prev => new Set([...prev, operation.deviceId]));
-      setFilteredDevices(prev => prev.filter(d => d.id !== operation.deviceId));
     }
     
     // 从历史中移除这个操作
@@ -368,12 +661,17 @@ export default function DeviceInventoryPage() {
     const device = devices.find(d => d.id === deviceId);
     if (!device) return;
     
+    // 检查设备是否已被选择
+    if (selectedDevices.has(deviceId)) {
+      return; // 如果已选择，不重复选择
+    }
+    
     setSelectedDevices(prev => new Set([...prev, deviceId]));
-    // 从显示列表中移除
-    setFilteredDevices(prev => prev.filter(d => d.id !== deviceId));
+    // 清空搜索栏，返回所有剩余列表
+    setSearchTerm('');
     // 记录操作
     recordOperation('manual', 'add', deviceId, device.product_name);
-  }, [isInventoryMode, devices, recordOperation]);
+  }, [isInventoryMode, devices, selectedDevices, recordOperation]);
 
   // 获取历史操作员姓名
   const loadOperatorSuggestions = useCallback(async () => {
@@ -432,6 +730,10 @@ export default function DeviceInventoryPage() {
     // 保存格式化后的操作员姓名
     setOperatorName(formattedOperatorName);
     
+    // 记录开始日期
+    const startDate = new Date().toISOString().split('T')[0]; // YYYY-MM-DD格式
+    setInventoryStartDate(startDate);
+    
     setIsInventoryMode(true);
     setScanning(true);
     setSelectedDevices(new Set());
@@ -447,16 +749,163 @@ export default function DeviceInventoryPage() {
     });
     
     // 记录开始时间
-    setInventoryStartTime(Date.now());
+    const startTime = Date.now();
+    setInventoryStartTime(startTime);
+    
+    // 初始化当前操作员的盘点记录
+    setOperatorParts({ [formattedOperatorName]: [] });
+    
+    // 初始化当前操作员的盘点日期
+    setOperatorDates({ [formattedOperatorName]: startDate });
+    
+    // 初始化当前操作员的开始数量（0，因为这是第一个操作员）
+    setOperatorStartCounts({ [formattedOperatorName]: 0 });
+    
+    // 保存状态
+    const currentCompanyId = getCurrentCompanyId();
+    const state: InventoryState = {
+      operatorName: formattedOperatorName,
+      startDate: startDate,
+      selectedDevices: new Set(),
+      inventoryStats: {
+        scanCount: 0,
+        manualCount: 0,
+        totalCount: 0
+      },
+      inventoryStartTime: startTime,
+      totalDevices: devices.length, // 保存总设备数量
+      operatorParts: { [formattedOperatorName]: [] }, // 初始化当前操作员的盘点记录
+      operatorDates: { [formattedOperatorName]: startDate }, // 初始化当前操作员的盘点日期
+      operatorStartCounts: { [formattedOperatorName]: 0 }, // 初始化当前操作员的开始数量（0）
+      companyId: currentCompanyId
+    };
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        ...state,
+        selectedDevices: []
+      }));
+    } catch (e) {
+      console.warn('保存盘点状态失败:', e);
+    }
     
     showMessage(`开始盘点 - 操作员: ${formattedOperatorName}`);
-  }, [operatorName, devices, showMessage]);
+  }, [operatorName, devices, showMessage, getCurrentCompanyId]);
+  
+  // 继续之前的盘点
+  const handleContinueInventory = useCallback(() => {
+    const savedState = loadInventoryState();
+    if (!savedState) {
+      showMessage('未找到保存的盘点状态');
+      return;
+    }
+
+    // 显示操作员输入弹窗，设置为继续盘点模式
+    setIsContinueMode(true);
+    setOperatorName(''); // 清空操作员姓名，要求重新输入
+    setShowOperatorInput(true);
+    loadOperatorSuggestions();
+    
+    // 保存状态到组件状态，以便在弹窗中显示
+    // 我们可以通过全局变量或者状态来传递，这里使用useState会更合适
+    // 但为了简单，我们可以在弹窗中再次调用loadInventoryState
+  }, [loadInventoryState, showMessage, loadOperatorSuggestions]);
+
+  // 确认继续盘点时的操作员信息
+  const handleConfirmContinueOperator = useCallback(() => {
+    if (!operatorName.trim()) {
+      showMessage('请输入操作员姓名');
+      return;
+    }
+    
+    const savedState = loadInventoryState();
+    if (!savedState) {
+      showMessage('未找到保存的盘点状态');
+      return;
+    }
+    
+    const formattedOperatorName = operatorName.trim()
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+    
+    // 更新操作员姓名（可能是不同的人继续盘点）
+    const updatedOperatorName = formattedOperatorName;
+    
+    // 恢复开始日期（使用保存的开始日期，不是当前日期）
+    const startDate = savedState.startDate || new Date().toISOString().split('T')[0];
+    
+    // 计算当前操作员开始盘点时的设备数量（之前操作员已盘点的设备）
+    const previousDevicesCount = savedState.selectedDevices.size;
+    
+    setOperatorName(updatedOperatorName);
+    setSelectedDevices(savedState.selectedDevices);
+    setInventoryStats(savedState.inventoryStats);
+    setInventoryStartTime(savedState.inventoryStartTime);
+    setInventoryStartDate(startDate);
+    
+    // 恢复操作员盘点记录（保留之前操作员的记录）
+    setOperatorParts(savedState.operatorParts || {});
+    
+    // 恢复操作员盘点日期（保留之前操作员的日期）
+    setOperatorDates(savedState.operatorDates || {});
+    
+    // 恢复操作员开始数量（保留之前操作员的开始数量）
+    setOperatorStartCounts(savedState.operatorStartCounts || {});
+    
+    // 初始化当前操作员的盘点记录（从之前的设备数量开始）
+    // 记录当前操作员开始盘点时的设备数量（之前操作员已盘点的数量）
+    setOperatorParts(prev => ({
+      ...prev,
+      [updatedOperatorName]: Array.from(savedState.selectedDevices) // 当前操作员开始时继承之前的设备列表
+    }));
+    
+    // 记录当前操作员开始盘点时的设备数量
+    setOperatorStartCounts(prev => ({
+      ...prev,
+      [updatedOperatorName]: previousDevicesCount // 记录当前操作员开始盘点时的设备数量
+    }));
+    
+    setIsInventoryMode(true);
+    setScanning(true);
+    setShowOperatorInput(false);
+    setIsContinueMode(false);
+    
+    // 更新保存的状态，包含新的操作员姓名和公司ID
+    const currentCompanyId = getCurrentCompanyId();
+    const updatedState: InventoryState = {
+      ...savedState,
+      operatorName: updatedOperatorName,
+      companyId: currentCompanyId,
+      operatorParts: {
+        ...(savedState.operatorParts || {}),
+        [updatedOperatorName]: Array.from(savedState.selectedDevices) // 初始化当前操作员的记录
+      },
+      operatorStartCounts: {
+        ...(savedState.operatorStartCounts || {}),
+        [updatedOperatorName]: previousDevicesCount // 记录当前操作员开始盘点时的设备数量
+      }
+    };
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        ...updatedState,
+        selectedDevices: Array.from(updatedState.selectedDevices)
+      }));
+    } catch (e) {
+      console.warn('保存盘点状态失败:', e);
+    }
+    
+    showMessage(`继续盘点 - 操作员: ${updatedOperatorName}，开始日期: ${startDate}，已盘点 ${savedState.selectedDevices.size} 个设备`);
+  }, [operatorName, loadInventoryState, showMessage, getCurrentCompanyId]);
 
   // 处理键盘事件
   const handleOperatorKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (!showSuggestions || filteredSuggestions.length === 0) {
       if (e.key === 'Enter') {
-        handleConfirmOperator();
+        if (isContinueMode) {
+          handleConfirmContinueOperator();
+        } else {
+          handleConfirmOperator();
+        }
       }
       return;
     }
@@ -479,7 +928,11 @@ export default function DeviceInventoryPage() {
         if (selectedSuggestionIndex >= 0) {
           selectSuggestion(filteredSuggestions[selectedSuggestionIndex]);
         } else {
-          handleConfirmOperator();
+          if (isContinueMode) {
+            handleConfirmContinueOperator();
+          } else {
+            handleConfirmOperator();
+          }
         }
         break;
       case 'Escape':
@@ -487,7 +940,7 @@ export default function DeviceInventoryPage() {
         setSelectedSuggestionIndex(-1);
         break;
     }
-  }, [showSuggestions, filteredSuggestions, selectedSuggestionIndex, selectSuggestion, handleConfirmOperator]);
+  }, [showSuggestions, filteredSuggestions, selectedSuggestionIndex, selectSuggestion, isContinueMode, handleConfirmOperator, handleConfirmContinueOperator]);
 
   // 开始盘点
   const handleStartInventory = useCallback(() => {
@@ -501,10 +954,19 @@ export default function DeviceInventoryPage() {
     setScanning(true);
   }, []);
 
-  // 返回主页
+  // 返回库存盘点页面
   const handleBack = useCallback(() => {
-    window.location.href = '/scan';
-  }, []);
+    if (isInventoryMode) {
+      // 如果正在盘点，保存状态并确认
+      if (confirm('确定要返回吗？盘点进度将自动保存，下次可以继续盘点。')) {
+        saveInventoryState();
+        window.location.href = '/parts-inventory';
+      }
+    } else {
+      // 如果不在盘点模式，直接返回库存盘点页面
+      window.location.href = '/parts-inventory';
+    }
+  }, [isInventoryMode, saveInventoryState]);
 
   if (loading) {
     return (
@@ -599,26 +1061,51 @@ export default function DeviceInventoryPage() {
               盘点历史
             </button>
             {!isInventoryMode ? (
-              <button
-                onClick={handleStartInventory}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: 8,
-                  border: 'none',
-                  background: '#059669',
-                  color: '#fff',
-                  fontWeight: 500,
-                  fontSize: 14,
-                }}
-              >
-                开始盘点
-              </button>
+              <>
+                {loadInventoryState() && (
+                  <button
+                    onClick={handleContinueInventory}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 8,
+                      border: 'none',
+                      background: '#3b82f6',
+                      color: '#fff',
+                      fontWeight: 500,
+                      fontSize: 14,
+                    }}
+                  >
+                    继续盘点
+                  </button>
+                )}
+                <button
+                  onClick={handleStartInventory}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: 'none',
+                    background: '#059669',
+                    color: '#fff',
+                    fontWeight: 500,
+                    fontSize: 14,
+                  }}
+                >
+                  开始盘点
+                </button>
+              </>
             ) : (
               <button
                 onClick={() => {
-                  setShowCompleteModal(true);
-                  saveInventoryHistory();
-                  handleEndInventory();
+                  // 检查是否完成所有盘点
+                  if (selectedDevices.size < devices.length) {
+                    // 未完成，显示确认对话框
+                    setShowIncompleteConfirmModal(true);
+                  } else {
+                    // 已完成，直接保存并结束
+                    setShowCompleteModal(true);
+                    saveInventoryHistory();
+                    handleEndInventory();
+                  }
                 }}
                 style={{
                   padding: '8px 12px',
@@ -704,7 +1191,7 @@ export default function DeviceInventoryPage() {
       {/* 搜索区域和统计信息 */}
       <div style={{ padding: '0 16px 16px', marginTop: 24 }}>
         {/* 最后设备警告提示 */}
-        {isInventoryMode && filteredDevices.length === 1 && (
+        {isInventoryMode && (devices.length - selectedDevices.size) === 1 && (
           <div style={{
             background: '#fef2f2',
             border: '1px solid #fecaca',
@@ -786,41 +1273,117 @@ export default function DeviceInventoryPage() {
         </div>
         <div style={{ 
           display: 'flex',
+          flexDirection: 'column',
           gap: 12,
-          alignItems: 'center',
           marginBottom: 12,
         }}>
-          <input
-            type="text"
-            placeholder="搜索产品名称、编码或Lot/Serial号..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              width: 200,
-              padding: '10px 12px',
-              borderRadius: 6,
-              border: '1px solid #e5e7eb',
-              fontSize: 14,
-              outline: 'none',
-            }}
-          />
-          <button
-            onClick={() => setSearchTerm('')}
-            disabled={!searchTerm}
-            style={{
-              padding: '10px 12px',
-              borderRadius: 6,
-              border: '1px solid #e5e7eb',
-              background: searchTerm ? '#fff' : '#f9fafb',
-              color: searchTerm ? '#6b7280' : '#d1d5db',
-              fontSize: 14,
-              cursor: searchTerm ? 'pointer' : 'not-allowed',
-              transition: 'all 0.2s ease',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            清空
-          </button>
+          {/* 搜索框和清空按钮行 */}
+          <div style={{
+            display: 'flex',
+            gap: 12,
+            alignItems: 'center',
+            width: '100%',
+          }}>
+            <input
+              type="text"
+              placeholder="搜索产品名称、编码或Lot/Serial号..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                padding: '10px 12px',
+                borderRadius: 6,
+                border: '1px solid #e5e7eb',
+                fontSize: 14,
+                outline: 'none',
+              }}
+            />
+            <button
+              onClick={() => setSearchTerm('')}
+              disabled={!searchTerm}
+              style={{
+                padding: '10px 16px',
+                borderRadius: 6,
+                border: '1px solid #e5e7eb',
+                background: searchTerm ? '#fff' : '#f9fafb',
+                color: searchTerm ? '#6b7280' : '#d1d5db',
+                fontSize: 14,
+                cursor: searchTerm ? 'pointer' : 'not-allowed',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              清空
+            </button>
+          </div>
+          
+          {/* 快捷搜索按钮 */}
+          <div style={{
+            display: 'flex',
+            gap: 8,
+            flexWrap: 'wrap',
+            width: '100%',
+          }}>
+            <button
+              onClick={() => setSearchTerm(searchTerm === 'iPhone' ? '' : 'iPhone')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 6,
+                border: '1px solid #e5e7eb',
+                background: searchTerm === 'iPhone' ? '#eff6ff' : '#fff',
+                color: searchTerm === 'iPhone' ? '#2563eb' : '#374151',
+                fontSize: 14,
+                fontWeight: searchTerm === 'iPhone' ? 600 : 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+                flex: '1 1 auto',
+                minWidth: 'fit-content',
+              }}
+            >
+              iPhone
+            </button>
+            <button
+              onClick={() => setSearchTerm(searchTerm === 'iPad' ? '' : 'iPad')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 6,
+                border: '1px solid #e5e7eb',
+                background: searchTerm === 'iPad' ? '#eff6ff' : '#fff',
+                color: searchTerm === 'iPad' ? '#2563eb' : '#374151',
+                fontSize: 14,
+                fontWeight: searchTerm === 'iPad' ? 600 : 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+                flex: '1 1 auto',
+                minWidth: 'fit-content',
+              }}
+            >
+              iPad
+            </button>
+            <button
+              onClick={() => setSearchTerm(searchTerm === 'Samsung' ? '' : 'Samsung')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 6,
+                border: '1px solid #e5e7eb',
+                background: searchTerm === 'Samsung' ? '#eff6ff' : '#fff',
+                color: searchTerm === 'Samsung' ? '#2563eb' : '#374151',
+                fontSize: 14,
+                fontWeight: searchTerm === 'Samsung' ? 600 : 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+                flex: '1 1 auto',
+                minWidth: 'fit-content',
+              }}
+            >
+              Samsung
+            </button>
+          </div>
         </div>
         
         {/* 统计信息 */}
@@ -1048,8 +1611,59 @@ export default function DeviceInventoryPage() {
               fontWeight: 600,
               color: '#111827',
             }}>
-              请输入操作员姓名
+              {isContinueMode ? '继续盘点' : '请输入操作员姓名'}
             </h3>
+            
+            {isContinueMode && (() => {
+              const savedState = loadInventoryState();
+              if (!savedState) return null;
+              
+              const completedCount = savedState.selectedDevices.size;
+              const totalCount = savedState.totalDevices || devices.length;
+              const remainingCount = totalCount - completedCount;
+              const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+              
+              return (
+                <div style={{
+                  fontSize: 14,
+                  color: '#6b7280',
+                  marginBottom: 16,
+                  textAlign: 'left',
+                  padding: '12px',
+                  background: '#f8fafc',
+                  borderRadius: 8,
+                }}>
+                  <div style={{ marginBottom: 8, fontWeight: 500, color: '#374151' }}>
+                    上次盘点进度
+                  </div>
+                  <div style={{ marginBottom: 4 }}>
+                    已完成: <span style={{ fontWeight: 600, color: '#059669' }}>{completedCount}</span> 个设备
+                  </div>
+                  <div style={{ marginBottom: 4 }}>
+                    剩余: <span style={{ fontWeight: 600, color: '#dc2626' }}>{remainingCount}</span> 个设备
+                  </div>
+                  <div style={{ marginBottom: 4 }}>
+                    总计: <span style={{ fontWeight: 600, color: '#374151' }}>{totalCount}</span> 个设备
+                  </div>
+                  <div style={{ 
+                    marginTop: 8, 
+                    paddingTop: 8, 
+                    borderTop: '1px solid #e5e7eb',
+                    fontSize: 13,
+                    color: '#9ca3af'
+                  }}>
+                    进度: {progressPercent}%
+                  </div>
+                  <div style={{ 
+                    marginTop: 8, 
+                    fontSize: 13, 
+                    color: '#6b7280' 
+                  }}>
+                    请输入操作员姓名以继续之前的盘点
+                  </div>
+                </div>
+              );
+            })()}
             
             <div style={{ position: 'relative', marginBottom: 20 }}>
               <input
@@ -1107,7 +1721,11 @@ export default function DeviceInventoryPage() {
             
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
               <button
-                onClick={() => setShowOperatorInput(false)}
+                onClick={() => {
+                  setShowOperatorInput(false);
+                  setIsContinueMode(false);
+                  setOperatorName('');
+                }}
                 style={{
                   padding: '10px 20px',
                   borderRadius: 8,
@@ -1122,7 +1740,13 @@ export default function DeviceInventoryPage() {
                 取消
               </button>
               <button
-                onClick={handleConfirmOperator}
+                onClick={() => {
+                  if (isContinueMode) {
+                    handleConfirmContinueOperator();
+                  } else {
+                    handleConfirmOperator();
+                  }
+                }}
                 style={{
                   padding: '10px 20px',
                   borderRadius: 8,
@@ -1134,7 +1758,7 @@ export default function DeviceInventoryPage() {
                   cursor: 'pointer',
                 }}
               >
-                确认开始
+                {isContinueMode ? '继续盘点' : '确认开始'}
               </button>
             </div>
           </div>
@@ -1274,6 +1898,116 @@ export default function DeviceInventoryPage() {
             >
               确定
             </button>
+          </div>
+        </div>
+      )}
+      
+      {/* 未完成确认弹窗 */}
+      {showIncompleteConfirmModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: 12,
+            padding: 24,
+            maxWidth: 400,
+            width: '90%',
+            textAlign: 'center',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          }}>
+            {/* 警告图标 */}
+            <div style={{
+              width: 64,
+              height: 64,
+              borderRadius: '50%',
+              background: '#fef2f2',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px',
+            }}>
+              <div style={{
+                fontSize: 32,
+                color: '#dc2626',
+              }}>
+                ⚠️
+              </div>
+            </div>
+            
+            {/* 标题 */}
+            <div style={{
+              fontSize: 18,
+              fontWeight: 600,
+              marginBottom: 8,
+              color: '#dc2626',
+            }}>
+              盘点未完成
+            </div>
+            
+            {/* 内容 */}
+            <div style={{
+              fontSize: 14,
+              color: '#6b7280',
+              marginBottom: 24,
+              lineHeight: 1.5,
+            }}>
+              您还有 <span style={{ fontWeight: 600, color: '#dc2626' }}>{devices.length - selectedDevices.size}</span> 个设备未盘点完成。
+              <br />
+              未完成的盘点不会被记录到历史中。
+              <br />
+              确认结束盘点吗？
+            </div>
+            
+            {/* 按钮 */}
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              <button
+                onClick={() => setShowIncompleteConfirmModal(false)}
+                style={{
+                  padding: '12px 24px',
+                  borderRadius: 8,
+                  border: '1px solid #d1d5db',
+                  background: '#fff',
+                  color: '#374151',
+                  fontWeight: 500,
+                  fontSize: 16,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  // 确认结束，但不保存历史
+                  setShowIncompleteConfirmModal(false);
+                  handleEndInventory();
+                  showMessage('盘点已结束（未完成，未记录历史）');
+                }}
+                style={{
+                  padding: '12px 24px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: '#dc2626',
+                  color: '#fff',
+                  fontWeight: 500,
+                  fontSize: 16,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                确认结束
+              </button>
+            </div>
           </div>
         </div>
       )}

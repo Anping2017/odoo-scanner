@@ -315,7 +315,7 @@ export default function ScanPage() {
         <div style={{ fontWeight: 700 }}>库存扫码</div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button
-            onClick={() => window.location.href = '/device-inventory'}
+            onClick={() => window.location.href = '/parts-inventory'}
             style={{
               padding: '8px 12px', 
               borderRadius: 8, 
@@ -326,7 +326,7 @@ export default function ScanPage() {
               fontSize: 14,
             }}
           >
-            设备盘点
+            库存盘点
           </button>
           <button
             onClick={() => window.location.href = '/receiving'}

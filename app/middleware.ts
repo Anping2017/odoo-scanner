@@ -18,7 +18,7 @@ export function middleware(req: NextRequest) {
     }
   }
 
-  if (pathname.startsWith('/scan') || pathname.startsWith('/device-inventory')) {
+  if (pathname.startsWith('/scan') || pathname.startsWith('/device-inventory') || pathname.startsWith('/parts-inventory') || pathname.startsWith('/parts-inventory-history') || pathname.startsWith('/inventory-history')) {
     if (!authed) {
       const url = req.nextUrl.clone();
       url.pathname = '/';
@@ -35,5 +35,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/scan', '/device-inventory', '/receiving/:path*', '/recycle'],
+  matcher: ['/', '/scan', '/device-inventory', '/parts-inventory', '/parts-inventory-history', '/inventory-history', '/receiving/:path*', '/recycle'],
 };

@@ -399,7 +399,7 @@ export default function ReceivingPage() {
             扫码盘点
           </button>
           <button
-            onClick={() => window.location.href = '/device-inventory'}
+            onClick={() => window.location.href = '/parts-inventory'}
             style={{
               padding: '8px 16px',
               borderRadius: 8,
@@ -410,7 +410,7 @@ export default function ReceivingPage() {
               cursor: 'pointer',
             }}
           >
-            设备盘点
+            库存盘点
           </button>
           <button
             onClick={handleLogout}

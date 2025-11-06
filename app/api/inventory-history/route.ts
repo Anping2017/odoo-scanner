@@ -45,13 +45,14 @@ export async function GET(req: NextRequest) {
     }
 
     // 从Odoo获取盘点历史记录
+    // 过滤掉活动记录（ACTIVITY开头的notes），只返回完成盘点记录
     console.log('Attempting to fetch inventory history from Odoo...');
     
     const result = await rpc('/web/dataset/call_kw', {
       model: 'inventory.history_8070',
       method: 'search_read',
       args: [
-        [], // 搜索条件
+        [['notes', 'not like', 'ACTIVITY:%']], // 过滤掉活动记录
         [
           'id',
           'store_name',
@@ -166,7 +167,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// 删除盘点历史记录
+// 删除盘点历史记录（支持单个和批量删除）
 export async function DELETE(req: NextRequest) {
   try {
     const base = getBaseFromCookie(req);
@@ -179,23 +180,39 @@ export async function DELETE(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
+    const ids = searchParams.get('ids'); // 批量删除的ID列表，逗号分隔
     const password = searchParams.get('password');
-
-    if (!id) {
-      return NextResponse.json({ error: 'Missing record ID' }, { status: 400 });
-    }
 
     // 验证删除密码
     if (password !== 'u01xhaby') {
       return NextResponse.json({ error: 'Invalid password' }, { status: 403 });
     }
 
-    console.log('准备删除盘点历史记录:', id);
+    // 确定要删除的ID数组
+    let idsToDelete: number[] = [];
+    
+    if (ids) {
+      // 批量删除：解析逗号分隔的ID列表
+      idsToDelete = ids.split(',').map(idStr => parseInt(idStr.trim())).filter(id => !isNaN(id));
+      if (idsToDelete.length === 0) {
+        return NextResponse.json({ error: 'Invalid IDs format' }, { status: 400 });
+      }
+    } else if (id) {
+      // 单个删除：兼容旧的方式
+      idsToDelete = [parseInt(id)];
+      if (isNaN(idsToDelete[0])) {
+        return NextResponse.json({ error: 'Invalid record ID' }, { status: 400 });
+      }
+    } else {
+      return NextResponse.json({ error: 'Missing record ID(s)' }, { status: 400 });
+    }
+
+    console.log('准备删除盘点历史记录:', idsToDelete);
 
     const result = await rpc('/web/dataset/call_kw', {
       model: 'inventory.history_8070',
       method: 'unlink',
-      args: [[parseInt(id)]],
+      args: [idsToDelete],
       kwargs: {}
     }, sessionId, base);
 
@@ -204,7 +221,8 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({
       success: true,
       deleted: result,
-      message: '记录已删除'
+      deletedCount: idsToDelete.length,
+      message: result ? `成功删除 ${idsToDelete.length} 条记录` : '删除失败'
     });
 
   } catch (e: any) {
