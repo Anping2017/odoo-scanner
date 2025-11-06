@@ -103,8 +103,17 @@ export default function LoginPage() {
         .shake {
           animation: shake 0.5s;
         }
+        @media (max-width: 768px) {
+          form {
+            max-width: 90% !important;
+            padding: 32px 24px !important;
+            border-radius: 20px !important;
+            margin: 16px !important;
+          }
+        }
         @media (max-width: 480px) {
           form {
+            max-width: 95% !important;
             padding: 28px 20px !important;
             border-radius: 20px !important;
             margin: 12px !important;
@@ -115,6 +124,12 @@ export default function LoginPage() {
           }
           input, select {
             font-size: 16px !important; /* 防止iOS自动缩放 */
+          }
+        }
+        @media (min-width: 769px) {
+          form {
+            max-width: 520px !important;
+            padding: 48px 40px !important;
           }
         }
         @media (max-height: 700px) {
@@ -148,7 +163,7 @@ export default function LoginPage() {
         onSubmit={handleSubmit}
         style={{
           width: '100%',
-          maxWidth: '440px',
+          maxWidth: '520px',
           maxHeight: '90vh',
           borderRadius: '24px',
           padding: '40px 32px',
