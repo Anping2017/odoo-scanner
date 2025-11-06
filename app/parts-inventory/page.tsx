@@ -291,9 +291,7 @@ export default function PartsInventoryPage() {
     setShowCategorySelection(false);
     setLoading(true);
     // 加载第一页数据
-    if (selectedCategory && selectedCategory !== 'Devices') {
-      loadParts(1, '', selectedCategory);
-    }
+    loadParts(1, '', selectedCategory as 'Parts' | 'Accessories');
   }, [selectedCategory, loadParts, showMessage]);
 
   // 处理返回按钮
@@ -519,7 +517,7 @@ export default function PartsInventoryPage() {
 
   // 当搜索词或页码改变时，重新加载数据（只在选择了类别后）
   useEffect(() => {
-    if (!showCategorySelection && selectedCategory && selectedCategory !== 'Devices') {
+    if (!showCategorySelection && selectedCategory && (selectedCategory === 'Parts' || selectedCategory === 'Accessories')) {
       loadParts(currentPage, apiSearchTerm, selectedCategory);
     }
   }, [currentPage, apiSearchTerm, pageSize, loadParts, showCategorySelection, selectedCategory]);
