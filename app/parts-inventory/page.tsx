@@ -2254,15 +2254,34 @@ export default function PartsInventoryPage() {
                   transition: 'all 0.2s ease',
                 }}
               >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ 
+                      fontWeight: 600, 
+                      fontSize: 16, 
+                      marginBottom: 4,
+                      wordBreak: 'break-word',
+                      overflowWrap: 'break-word',
+                      lineHeight: '1.4',
+                    }}>
                       {part.product_name}
                     </div>
-                    <div style={{ fontSize: 14, color: '#6b7280', marginBottom: 2 }}>
+                    <div style={{ 
+                      fontSize: 14, 
+                      color: '#6b7280', 
+                      marginBottom: 2,
+                      wordBreak: 'break-word',
+                      overflowWrap: 'break-word',
+                    }}>
                       编码: {part.product_code}
                     </div>
-                    <div style={{ fontSize: 14, color: '#6b7280', marginBottom: 2 }}>
+                    <div style={{ 
+                      fontSize: 14, 
+                      color: '#6b7280', 
+                      marginBottom: 2,
+                      wordBreak: 'break-word',
+                      overflowWrap: 'break-word',
+                    }}>
                       类别: {part.category_name}
                     </div>
                     <div style={{ fontSize: 14, color: '#059669', fontWeight: 500 }}>
@@ -2283,6 +2302,8 @@ export default function PartsInventoryPage() {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
+                      flexShrink: 0,
+                      marginTop: 2,
                     }}>
                       {selectedParts.has(part.id) && (
                         <div style={{
