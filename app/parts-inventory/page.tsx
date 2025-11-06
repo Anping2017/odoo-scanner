@@ -1538,7 +1538,7 @@ export default function PartsInventoryPage() {
               fontSize: 14,
             }}
           >
-            返回
+            ⬅️ 返回
           </button>
           <button
             onClick={() => window.location.href = '/inventory-history'}
@@ -1552,7 +1552,7 @@ export default function PartsInventoryPage() {
               fontSize: 14,
             }}
           >
-            盘点历史
+            📊 盘点历史
           </button>
           {!isInventoryMode ? (
             <>
@@ -1569,7 +1569,7 @@ export default function PartsInventoryPage() {
                     fontSize: 14,
                   }}
                 >
-                  继续盘点
+                  ▶️ 继续盘点
                 </button>
               )}
               <button
@@ -1584,7 +1584,7 @@ export default function PartsInventoryPage() {
                   fontSize: 14,
                 }}
               >
-                开始盘点
+                ▶️ 开始盘点
               </button>
             </>
           ) : (
@@ -1611,7 +1611,7 @@ export default function PartsInventoryPage() {
                   fontSize: 14,
                 }}
               >
-                结束盘点
+                ⏹️ 结束盘点
               </button>
             </>
           )}
@@ -1787,7 +1787,7 @@ export default function PartsInventoryPage() {
                 flexShrink: 0,
               }}
             >
-              清空
+              🗑️ 清空
             </button>
           </div>
           

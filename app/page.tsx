@@ -456,22 +456,27 @@ export default function LoginPage() {
               e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
             }
           }}
-        >
-          {submitting ? (
-            <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-              <span style={{
-                display: 'inline-block',
-                width: '16px',
-                height: '16px',
-                border: '2px solid rgba(255,255,255,0.3)',
-                borderTopColor: '#fff',
-                borderRadius: '50%',
-                animation: 'spin 0.6s linear infinite',
-              }} />
-              登录中…
-            </span>
-          ) : '登录'}
-        </button>
+          >
+            {submitting ? (
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                <span style={{
+                  display: 'inline-block',
+                  width: '16px',
+                  height: '16px',
+                  border: '2px solid rgba(255,255,255,0.3)',
+                  borderTopColor: '#fff',
+                  borderRadius: '50%',
+                  animation: 'spin 0.6s linear infinite',
+                }} />
+                登录中…
+              </span>
+            ) : (
+              <>
+                <span style={{ display: 'inline-block', marginRight: '8px' }}>🔐</span>
+                <span>登录</span>
+              </>
+            )}
+          </button>
 
         {/* 分隔线 */}
         <div style={{

@@ -377,6 +377,31 @@ export default function ScanPage() {
           <div className="top-bar-buttons" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
               className="top-bar-button"
+              onClick={() => window.location.href = '/user-guide'}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 10,
+                border: '1px solid #e5e7eb',
+                background: '#fff',
+                color: '#374151',
+                fontWeight: 500,
+                fontSize: 13,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#667eea';
+                e.currentTarget.style.color = '#667eea';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#e5e7eb';
+                e.currentTarget.style.color = '#374151';
+              }}
+            >
+              📖 使用说明
+            </button>
+            <button
+              className="top-bar-button"
               onClick={() => window.location.href = '/parts-inventory'}
               style={{
                 padding: '8px 12px',
@@ -398,7 +423,7 @@ export default function ScanPage() {
                 e.currentTarget.style.color = '#374151';
               }}
             >
-              库存盘点
+              📦 库存盘点
             </button>
             <button
               className="top-bar-button"
@@ -423,7 +448,7 @@ export default function ScanPage() {
                 e.currentTarget.style.color = '#374151';
               }}
             >
-              收货入库
+              📥 收货入库
             </button>
             <button
               className="top-bar-button"
@@ -447,7 +472,7 @@ export default function ScanPage() {
                 e.currentTarget.style.color = '#374151';
               }}
             >
-              重新扫码
+              🔄 重新扫码
             </button>
             <button
               className="top-bar-button"
@@ -472,7 +497,7 @@ export default function ScanPage() {
                 e.currentTarget.style.color = '#ef4444';
               }}
             >
-              退出
+              🚪 退出
             </button>
           </div>
         </div>
@@ -745,7 +770,7 @@ export default function ScanPage() {
                       }
                     }}
                   >
-                    {updating ? '更新中…' : '更新库存'}
+                    {updating ? '更新中…' : '💾 更新库存'}
                   </button>
                   <button
                     onClick={handleRescan}
@@ -796,7 +821,7 @@ export default function ScanPage() {
                   fontWeight: 600,
                 }}
               >
-                重新扫码
+                🔄 重新扫码
               </button>
             </div>
           ) : null}
@@ -1064,9 +1089,9 @@ export default function ScanPage() {
             e.currentTarget.style.transform = 'translateY(0)';
             e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.3)';
           }}
-        >
-          查询
-        </button>
+            >
+              🔍 查询
+            </button>
         <button
           type="button"
           onClick={handleClear}
@@ -1090,7 +1115,7 @@ export default function ScanPage() {
             e.currentTarget.style.color = '#374151';
           }}
         >
-          清空
+          🗑️ 清空
         </button>
       </form>
 

@@ -424,9 +424,9 @@ export default function InventoryHistoryPage() {
                     cursor: isBatchDeleting ? 'not-allowed' : 'pointer',
                     opacity: isBatchDeleting ? 0.6 : 1,
                   }}
-                >
-                  {isBatchDeleting ? '删除中...' : `批量删除 (${selectedIds.size})`}
-                </button>
+                  >
+                    {isBatchDeleting ? '删除中...' : `🗑️🗑️ 批量删除 (${selectedIds.size})`}
+                  </button>
               )}
               <button
                 onClick={() => window.location.href = '/scan'}
@@ -440,7 +440,7 @@ export default function InventoryHistoryPage() {
                   fontSize: 14,
                 }}
               >
-                返回
+                ⬅️ 返回
               </button>
             <button
               onClick={loadHistories}
@@ -454,7 +454,7 @@ export default function InventoryHistoryPage() {
                 fontSize: 14,
               }}
             >
-              刷新
+              🔄 刷新
             </button>
           </div>
         </div>
@@ -556,7 +556,7 @@ export default function InventoryHistoryPage() {
                 cursor: 'pointer',
               }}
             >
-              清空筛选
+              🗑️ 清空筛选
             </button>
           </div>
         </div>
@@ -816,7 +816,7 @@ export default function InventoryHistoryPage() {
                         opacity: deletingId === history.id ? 0.6 : 1,
                       }}
                     >
-                      {deletingId === history.id ? '删除中...' : '删除'}
+                      {deletingId === history.id ? '删除中...' : '🗑️ 删除'}
                     </button>
                   </div>
                 </div>
@@ -968,7 +968,7 @@ export default function InventoryHistoryPage() {
                   cursor: 'pointer',
                 }}
               >
-                取消
+                ❌ 取消
               </button>
               <button
                 onClick={confirmDeleteWithPassword}
@@ -983,7 +983,7 @@ export default function InventoryHistoryPage() {
                   cursor: 'pointer',
                 }}
               >
-                确认删除
+                ✅ 确认删除
               </button>
             </div>
           </div>
