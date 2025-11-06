@@ -1513,103 +1513,108 @@ export default function PartsInventoryPage() {
         zIndex: 10,
         background: '#fff',
         borderBottom: '1px solid #e5e7eb',
-        padding: '12px 16px',
+        padding: '16px',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontWeight: 700, fontSize: 16 }}>
+        {/* 标题行 */}
+        <div style={{ 
+          marginBottom: '12px',
+        }}>
+          <div style={{ fontWeight: 700, fontSize: 18, color: '#111827' }}>
             零配件盘点 {selectedCategory && `(${selectedCategory === 'Parts' ? '零件' : '配件'})`}
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={handleBack}
-              style={{
-                padding: '8px 12px',
-                borderRadius: 8,
-                border: '1px solid #e5e7eb',
-                background: '#fff',
-                color: '#374151',
-                fontWeight: 500,
-                fontSize: 14,
-              }}
-            >
-              返回
-            </button>
-            <button
-              onClick={() => window.location.href = '/inventory-history'}
-              style={{
-                padding: '8px 12px',
-                borderRadius: 8,
-                border: '1px solid #e5e7eb',
-                background: '#fff',
-                color: '#374151',
-                fontWeight: 500,
-                fontSize: 14,
-              }}
-            >
-              盘点历史
-            </button>
-            {!isInventoryMode ? (
-              <>
-                {loadInventoryState() && (
-                  <button
-                    onClick={handleContinueInventory}
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: 8,
-                      border: 'none',
-                      background: '#3b82f6',
-                      color: '#fff',
-                      fontWeight: 500,
-                      fontSize: 14,
-                    }}
-                  >
-                    继续盘点
-                  </button>
-                )}
+        </div>
+        
+        {/* 按钮行 */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            onClick={handleBack}
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: '1px solid #e5e7eb',
+              background: '#fff',
+              color: '#374151',
+              fontWeight: 500,
+              fontSize: 14,
+            }}
+          >
+            返回
+          </button>
+          <button
+            onClick={() => window.location.href = '/inventory-history'}
+            style={{
+              padding: '8px 12px',
+              borderRadius: 8,
+              border: '1px solid #e5e7eb',
+              background: '#fff',
+              color: '#374151',
+              fontWeight: 500,
+              fontSize: 14,
+            }}
+          >
+            盘点历史
+          </button>
+          {!isInventoryMode ? (
+            <>
+              {loadInventoryState() && (
                 <button
-                  onClick={handleStartInventoryMode}
+                  onClick={handleContinueInventory}
                   style={{
                     padding: '8px 12px',
                     borderRadius: 8,
                     border: 'none',
-                    background: '#059669',
+                    background: '#3b82f6',
                     color: '#fff',
                     fontWeight: 500,
                     fontSize: 14,
                   }}
                 >
-                  开始盘点
+                  继续盘点
                 </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={async () => {
-                    // 检查是否所有页面都已盘点完成（检查所有页面的总数量）
-                    if (selectedParts.size >= totalCount && selectedParts.size > 0) {
-                      // 保存历史记录
-                      await savePartsInventoryHistory();
-                      setShowCompleteModal(true);
-                      handleEndInventory();
-                    } else {
-                      setShowIncompleteConfirmModal(true);
-                    }
-                  }}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: 8,
-                    border: 'none',
-                    background: '#dc2626',
-                    color: '#fff',
-                    fontWeight: 500,
-                    fontSize: 14,
-                  }}
-                >
-                  结束盘点
-                </button>
-              </>
-            )}
-          </div>
+              )}
+              <button
+                onClick={handleStartInventoryMode}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: '#059669',
+                  color: '#fff',
+                  fontWeight: 500,
+                  fontSize: 14,
+                }}
+              >
+                开始盘点
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={async () => {
+                  // 检查是否所有页面都已盘点完成（检查所有页面的总数量）
+                  if (selectedParts.size >= totalCount && selectedParts.size > 0) {
+                    // 保存历史记录
+                    await savePartsInventoryHistory();
+                    setShowCompleteModal(true);
+                    handleEndInventory();
+                  } else {
+                    setShowIncompleteConfirmModal(true);
+                  }
+                }}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: '#dc2626',
+                  color: '#fff',
+                  fontWeight: 500,
+                  fontSize: 14,
+                }}
+              >
+                结束盘点
+              </button>
+            </>
+          )}
         </div>
       </div>
 
