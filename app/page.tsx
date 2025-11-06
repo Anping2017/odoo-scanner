@@ -105,9 +105,10 @@ export default function LoginPage() {
         }
         @media (max-width: 480px) {
           form {
-            padding: 32px 24px !important;
+            padding: 28px 20px !important;
             border-radius: 20px !important;
-            margin: 16px !important;
+            margin: 12px !important;
+            max-height: calc(100vh - 24px) !important;
           }
           h1 {
             font-size: 24px !important;
@@ -120,6 +121,16 @@ export default function LoginPage() {
           .login-container {
             align-items: flex-start !important;
             padding-top: 20px !important;
+            padding-bottom: 20px !important;
+          }
+          form {
+            max-height: calc(100vh - 40px) !important;
+          }
+        }
+        /* 确保CompanyPicker在移动端可见 */
+        @media (max-width: 480px) {
+          .company-picker-container {
+            margin-bottom: 16px !important;
           }
         }
         /* 触摸设备优化 */
@@ -138,6 +149,7 @@ export default function LoginPage() {
         style={{
           width: '100%',
           maxWidth: '440px',
+          maxHeight: '90vh',
           borderRadius: '24px',
           padding: '40px 32px',
           boxShadow: '0 20px 60px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.1)',
@@ -145,6 +157,8 @@ export default function LoginPage() {
           backdropFilter: 'blur(10px)',
           position: 'relative',
           zIndex: 1,
+          overflowY: 'auto',
+          overflowX: 'hidden',
         }}
       >
         {/* Logo/标题区域 */}
@@ -233,9 +247,17 @@ export default function LoginPage() {
             <span style={{
               position: 'absolute',
               left: '16px',
+              top: '50%',
+              transform: 'translateY(-50%)',
               fontSize: '18px',
               color: focusedField === 'login' ? '#667eea' : '#9ca3af',
               transition: 'color 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '20px',
+              height: '20px',
+              lineHeight: '1',
             }}>
               👤
             </span>
@@ -287,9 +309,17 @@ export default function LoginPage() {
             <span style={{
               position: 'absolute',
               left: '16px',
+              top: '50%',
+              transform: 'translateY(-50%)',
               fontSize: '18px',
               color: focusedField === 'password' ? '#667eea' : '#9ca3af',
               transition: 'color 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '20px',
+              height: '20px',
+              lineHeight: '1',
             }}>
               🔒
             </span>
@@ -318,7 +348,7 @@ export default function LoginPage() {
         </div>
 
         {/* moboplus 域名时，显示公司 ID 单选 */}
-        <div style={{ marginBottom: '20px' }}>
+        <div className="company-picker-container" style={{ marginBottom: '20px' }}>
           <CompanyPicker show={isMoboplus} required={isMoboplus} onChange={setCompanyId} />
         </div>
 

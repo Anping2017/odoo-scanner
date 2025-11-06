@@ -35,15 +35,24 @@ export default function CompanyPicker({ show = false, required = false, initialI
           .company-item {
             padding: 14px 16px !important;
           }
+          .company-picker-wrapper {
+            padding: 16px !important;
+          }
+        }
+        @media (max-height: 700px) {
+          .company-picker-wrapper {
+            padding: 12px !important;
+          }
         }
       `}</style>
-      <div style={{
+      <div className="company-picker-wrapper" style={{
         border: `2px solid ${touched && required && !val ? '#dc2626' : '#e5e7eb'}`,
         padding: '20px',
         borderRadius: '12px',
         marginTop: '4px',
         background: '#f9fafb',
         transition: 'all 0.2s ease',
+        minHeight: '120px',
       }}>
         <div style={{
           fontSize: '11px',
