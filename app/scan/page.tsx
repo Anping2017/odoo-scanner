@@ -289,106 +289,257 @@ export default function ScanPage() {
   }, [product?.id, counted, lastCode, loadHistory]);
 
   return (
-    <div
-      style={{
-        minHeight: '100dvh',
-        display: 'flex',
-        flexDirection: 'column',
-        background: '#f8fafc',
-        paddingBottom: 92,
-      }}
-    >
-      {/* 顶部栏 */}
+    <>
+      <style>{`
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(-20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .scanning-indicator {
+          animation: pulse 2s ease-in-out infinite;
+        }
+        .card-fade-in {
+          animation: fadeIn 0.3s ease-out;
+        }
+        @media (max-width: 768px) {
+          .top-bar-buttons {
+            flex-wrap: wrap;
+            gap: 6px !important;
+          }
+          .top-bar-button {
+            padding: 6px 10px !important;
+            font-size: 12px !important;
+          }
+          .camera-container {
+            height: 50vh !important;
+          }
+          .camera-container.paused {
+            height: 12vh !important;
+          }
+        }
+        @media (max-width: 480px) {
+          .top-bar-title {
+            font-size: 16px !important;
+          }
+          .camera-container {
+            height: 45vh !important;
+          }
+          .camera-container.paused {
+            height: 10vh !important;
+          }
+        }
+        @media (hover: none) and (pointer: coarse) {
+          button {
+            min-height: 44px;
+          }
+          input {
+            min-height: 44px;
+            font-size: 16px !important;
+          }
+        }
+      `}</style>
       <div
+        className="scan-page-container"
         style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 10,
-          background: '#fff',
-          borderBottom: '1px solid #e5e7eb',
+          minHeight: '100dvh',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '12px 14px',
+          flexDirection: 'column',
+          background: 'linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)',
+          paddingBottom: 'calc(92px + env(safe-area-inset-bottom))',
         }}
       >
-        <div style={{ fontWeight: 700 }}>库存扫码</div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => window.location.href = '/parts-inventory'}
-            style={{
-              padding: '8px 12px', 
-              borderRadius: 8, 
-              border: '1px solid #e5e7eb', 
-              background: '#fff', 
-              color: '#374151', 
-              fontWeight: 500, 
-              fontSize: 14,
-            }}
-          >
-            库存盘点
-          </button>
-          <button
-            onClick={() => window.location.href = '/receiving'}
-            style={{
-              padding: '8px 12px', 
-              borderRadius: 8, 
-              border: '1px solid #e5e7eb', 
-              background: '#fff',
-              color: '#374151',
-              fontWeight: 500,
-              fontSize: 14,
-            }}
-          >
-            收货入库
-          </button>
-          <button
-            onClick={handleRescan}
-            style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff' }}
-          >
-            重新扫码
-          </button>
-          <button
-            onClick={handleLogout}
-            style={{
-              padding: '8px 12px',
-              borderRadius: 8,
-              border: '1px solid #ef4444',
-              background: '#fff',
-              color: '#ef4444',
-              fontWeight: 600,
-            }}
-          >
-            退出
-          </button>
+        {/* 顶部栏 */}
+        <div
+          style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 10,
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(10px)',
+            borderBottom: '1px solid #e5e7eb',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '14px 16px',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
+          }}
+        >
+          <div className="top-bar-title" style={{ fontWeight: 700, fontSize: '18px', color: '#111827' }}>
+            库存扫码
+          </div>
+          <div className="top-bar-buttons" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              className="top-bar-button"
+              onClick={() => window.location.href = '/parts-inventory'}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 10,
+                border: '1px solid #e5e7eb',
+                background: '#fff',
+                color: '#374151',
+                fontWeight: 500,
+                fontSize: 13,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#667eea';
+                e.currentTarget.style.color = '#667eea';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#e5e7eb';
+                e.currentTarget.style.color = '#374151';
+              }}
+            >
+              库存盘点
+            </button>
+            <button
+              className="top-bar-button"
+              onClick={() => window.location.href = '/receiving'}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 10,
+                border: '1px solid #e5e7eb',
+                background: '#fff',
+                color: '#374151',
+                fontWeight: 500,
+                fontSize: 13,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#667eea';
+                e.currentTarget.style.color = '#667eea';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#e5e7eb';
+                e.currentTarget.style.color = '#374151';
+              }}
+            >
+              收货入库
+            </button>
+            <button
+              className="top-bar-button"
+              onClick={handleRescan}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 10,
+                border: '1px solid #e5e7eb',
+                background: '#fff',
+                color: '#374151',
+                fontSize: 13,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#059669';
+                e.currentTarget.style.color = '#059669';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#e5e7eb';
+                e.currentTarget.style.color = '#374151';
+              }}
+            >
+              重新扫码
+            </button>
+            <button
+              className="top-bar-button"
+              onClick={handleLogout}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 10,
+                border: '1px solid #ef4444',
+                background: '#fff',
+                color: '#ef4444',
+                fontWeight: 600,
+                fontSize: 13,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#ef4444';
+                e.currentTarget.style.color = '#fff';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#fff';
+                e.currentTarget.style.color = '#ef4444';
+              }}
+            >
+              退出
+            </button>
+          </div>
         </div>
-      </div>
 
       {/* 摄像头区域 */}
-      <div style={{ padding: 12 }}>
+      <div style={{ padding: '16px' }}>
         <div
+          className={`camera-container ${!scanning ? 'paused' : ''}`}
           style={{
             position: 'relative',
             overflow: 'hidden',
-            borderRadius: 12,
+            borderRadius: '16px',
             background: '#000',
-            height: scanning ? '56vh' : '14vh', // 扫描时56vh，暂停时14vh（约1/4）
-            transition: 'height 0.3s ease-in-out', // 添加平滑过渡动画
+            height: scanning ? '56vh' : '14vh',
+            transition: 'height 0.3s ease-in-out',
+            boxShadow: scanning ? '0 8px 24px rgba(0, 0, 0, 0.15)' : '0 2px 8px rgba(0, 0, 0, 0.1)',
+            border: scanning ? '2px solid #059669' : '2px solid #e5e7eb',
           }}
         >
           {scanning ? (
-            <Scanner onDetected={handleDetected} />
+            <>
+              <Scanner onDetected={handleDetected} />
+              <div
+                className="scanning-indicator"
+                style={{
+                  position: 'absolute',
+                  top: '12px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  background: 'rgba(5, 150, 105, 0.9)',
+                  color: '#fff',
+                  padding: '6px 16px',
+                  borderRadius: '20px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  zIndex: 5,
+                }}
+              >
+                <span>●</span>
+                <span>正在扫描...</span>
+              </div>
+            </>
           ) : (
             <div
               style={{
                 color: '#9ca3af',
                 height: '100%',
-                display: 'grid',
-                placeItems: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
                 fontSize: 14,
+                gap: '8px',
               }}
             >
-              摄像头已暂停
+              <div style={{ fontSize: '24px' }}>📷</div>
+              <div>摄像头已暂停</div>
             </div>
           )}
         </div>
@@ -396,97 +547,137 @@ export default function ScanPage() {
         {/* 最近条码 */}
         {lastCode ? (
           <div
+            className="card-fade-in"
             style={{
-              marginTop: 12,
-              padding: 12,
+              marginTop: 16,
+              padding: '14px 16px',
               background: '#fff',
               border: '1px solid #e5e7eb',
-              borderRadius: 10,
+              borderRadius: '12px',
               fontSize: 14,
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
             }}
           >
-            最近条码：<strong>{lastCode}</strong>
-            {isLoading ? <span style={{ marginLeft: 8, color: '#6b7280' }}>查询中…</span> : null}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ color: '#6b7280' }}>最近条码：</span>
+              <strong style={{ color: '#111827', fontSize: '15px' }}>{lastCode}</strong>
+              {isLoading ? (
+                <span style={{ marginLeft: 8, color: '#667eea', fontSize: '12px' }}>
+                  <span style={{ display: 'inline-block', animation: 'pulse 1.5s ease-in-out infinite' }}>查询中…</span>
+                </span>
+              ) : null}
+            </div>
           </div>
         ) : null}
 
         {/* 结果 + 盘点输入 */}
-        <div style={{ marginTop: 12, display: 'grid', gap: 12 }}>
+        <div style={{ marginTop: 16, display: 'grid', gap: 16 }}>
           {product ? (
             <div
+              className="card-fade-in"
               style={{
                 background: '#fff',
                 border: '1px solid #e5e7eb',
-                borderRadius: 12,
-                padding: 14,
-                lineHeight: 1.5,
+                borderRadius: '16px',
+                padding: '20px',
+                lineHeight: 1.6,
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
               }}
             >
-              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{product.name}</div>
-              <div style={{ color: '#6b7280', fontSize: 13 }}>
-                条码：{product.barcode || '-'} | 编码：{product.default_code || '-'}
+              <div style={{ fontWeight: 700, fontSize: '18px', marginBottom: 8, color: '#111827' }}>
+                {product.name}
               </div>
-              <div style={{ marginTop: 8, fontSize: 14 }}>
-                现有库存：<strong>{product.qty_available ?? '-'}</strong>
-                {typeof product.free_qty === 'number' ? (
-                  <span style={{ marginLeft: 10, color: '#6b7280' }}>可用：{product.free_qty}</span>
-                ) : null}
+              <div style={{ color: '#6b7280', fontSize: 13, marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                <span>条码：<span style={{ color: '#374151' }}>{product.barcode || '-'}</span></span>
+                <span>|</span>
+                <span>编码：<span style={{ color: '#374151' }}>{product.default_code || '-'}</span></span>
               </div>
-              <div style={{ marginTop: 6, fontSize: 14 }}>
-                <span style={{ color: '#6b7280' }}>
-                  门店零售价：<span style={{ color: '#059669' }}>
-                    {typeof product.list_price === 'number' ? `$${product.list_price.toFixed(2)}` : '-'}
-                  </span>
-                </span>
-                {typeof product.standard_price === 'number' ? (
-                  <span style={{ marginLeft: 10, color: '#6b7280' }}>
-                    成本：<span style={{ color: '#dc2626' }}>${product.standard_price.toFixed(2)}</span>
-                  </span>
-                ) : null}
-              </div>
-              {/* 只在自定义字段存在时显示 */}
-              {(product.raytech_p3 !== null && product.raytech_p3 !== undefined) || 
-               (product.raytech_stock !== null && product.raytech_stock !== undefined) ? (
-                <div style={{ marginTop: 6, fontSize: 14 }}>
-                  {typeof product.raytech_p3 === 'number' ? (
-                    <span style={{ color: '#6b7280' }}>
-                      总部零售价：<span style={{ color: '#059669' }}>${product.raytech_p3.toFixed(2)}</span>
-                    </span>
-                  ) : null}
-                  {typeof product.raytech_stock === 'number' ? (
-                    <span style={{ marginLeft: 10, color: '#6b7280' }}>
-                      总部库存：<span style={{ color: product.raytech_stock > 0 ? '#059669' : '#dc2626' }}>
-                        {product.raytech_stock > 0 ? '有货' : '无货'}
-                      </span>
+              <div style={{ 
+                marginTop: 12, 
+                padding: '12px', 
+                background: '#f0f9ff', 
+                borderRadius: '10px',
+                border: '1px solid #bae6fd',
+              }}>
+                <div style={{ fontSize: 14, marginBottom: 6 }}>
+                  <span style={{ color: '#6b7280' }}>现有库存：</span>
+                  <strong style={{ color: '#0369a1', fontSize: '18px' }}>{product.qty_available ?? '-'}</strong>
+                  {typeof product.free_qty === 'number' ? (
+                    <span style={{ marginLeft: 12, color: '#6b7280', fontSize: '13px' }}>
+                      可用：<span style={{ color: '#059669' }}>{product.free_qty}</span>
                     </span>
                   ) : null}
                 </div>
-              ) : null}
+                <div style={{ fontSize: 13, marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                  <span style={{ color: '#6b7280' }}>
+                    门店零售价：<span style={{ color: '#059669', fontWeight: 600 }}>
+                      {typeof product.list_price === 'number' ? `$${product.list_price.toFixed(2)}` : '-'}
+                    </span>
+                  </span>
+                  {typeof product.standard_price === 'number' ? (
+                    <span style={{ color: '#6b7280' }}>
+                      成本：<span style={{ color: '#dc2626', fontWeight: 600 }}>${product.standard_price.toFixed(2)}</span>
+                    </span>
+                  ) : null}
+                </div>
+                {/* 只在自定义字段存在时显示 */}
+                {(product.raytech_p3 !== null && product.raytech_p3 !== undefined) || 
+                 (product.raytech_stock !== null && product.raytech_stock !== undefined) ? (
+                  <div style={{ marginTop: 8, fontSize: 13, display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                    {typeof product.raytech_p3 === 'number' ? (
+                      <span style={{ color: '#6b7280' }}>
+                        总部零售价：<span style={{ color: '#059669', fontWeight: 600 }}>${product.raytech_p3.toFixed(2)}</span>
+                      </span>
+                    ) : null}
+                    {typeof product.raytech_stock === 'number' ? (
+                      <span style={{ color: '#6b7280' }}>
+                        总部库存：<span style={{ 
+                          color: product.raytech_stock > 0 ? '#059669' : '#dc2626', 
+                          fontWeight: 600 
+                        }}>
+                          {product.raytech_stock > 0 ? '有货' : '无货'}
+                        </span>
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
 
               {/* 盘点输入区 */}
-              <div style={{ marginTop: 12 }}>
-                <div style={{ marginBottom: 8 }}>
-                  <label style={{ fontSize: 14, fontWeight: 700 }}>盘点数量（调整为）：</label>
+              <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid #e5e7eb' }}>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>盘点数量（调整为）：</label>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   <button
                     onClick={() => {
                       const current = Number(counted) || 0;
                       setCounted(String(current - 1));
                     }}
                     style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 8,
-                      border: '1px solid #e5e7eb',
+                      width: 44,
+                      height: 44,
+                      borderRadius: 12,
+                      border: '2px solid #e5e7eb',
                       background: '#fff',
                       color: '#374151',
-                      fontSize: 18,
+                      fontSize: 20,
                       fontWeight: 600,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = '#667eea';
+                      e.currentTarget.style.color = '#667eea';
+                      e.currentTarget.style.background = '#f0f4ff';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = '#e5e7eb';
+                      e.currentTarget.style.color = '#374151';
+                      e.currentTarget.style.background = '#fff';
                     }}
                     title="减少1"
                   >
@@ -498,13 +689,26 @@ export default function ScanPage() {
                     value={counted}
                     onChange={(e) => setCounted(e.target.value)}
                     style={{
-                      width: 100,
-                      padding: '8px 10px',
-                      borderRadius: 8,
-                      border: '1px solid #e5e7eb',
+                      flex: 1,
+                      padding: '12px 16px',
+                      borderRadius: 12,
+                      border: '2px solid #e5e7eb',
                       outline: 'none',
-                      fontSize: 16,
+                      fontSize: 18,
+                      fontWeight: 600,
                       textAlign: 'center',
+                      background: '#f9fafb',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = '#667eea';
+                      e.currentTarget.style.background = '#fff';
+                      e.currentTarget.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.1)';
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = '#e5e7eb';
+                      e.currentTarget.style.background = '#f9fafb';
+                      e.currentTarget.style.boxShadow = 'none';
                     }}
                   />
                   <button
@@ -513,35 +717,63 @@ export default function ScanPage() {
                       setCounted(String(current + 1));
                     }}
                     style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 8,
-                      border: '1px solid #e5e7eb',
+                      width: 44,
+                      height: 44,
+                      borderRadius: 12,
+                      border: '2px solid #e5e7eb',
                       background: '#fff',
                       color: '#374151',
-                      fontSize: 18,
+                      fontSize: 20,
                       fontWeight: 600,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = '#667eea';
+                      e.currentTarget.style.color = '#667eea';
+                      e.currentTarget.style.background = '#f0f4ff';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = '#e5e7eb';
+                      e.currentTarget.style.color = '#374151';
+                      e.currentTarget.style.background = '#fff';
                     }}
                     title="增加1"
                   >
                     +
                   </button>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 10 }}>
                   <button
                     onClick={handleUpdateInventory}
                     disabled={updating}
                     style={{
-                      padding: '10px 14px',
-                      borderRadius: 10,
+                      flex: 1,
+                      padding: '14px 16px',
+                      borderRadius: 12,
                       border: 'none',
-                      background: updating ? '#9ca3af' : '#111827',
+                      background: updating ? '#9ca3af' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                       color: '#fff',
                       fontWeight: 600,
+                      fontSize: 15,
+                      cursor: updating ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.2s ease',
+                      boxShadow: updating ? 'none' : '0 4px 12px rgba(102, 126, 234, 0.3)',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!updating) {
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.4)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!updating) {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
+                      }
                     }}
                   >
                     {updating ? '更新中…' : '更新库存'}
@@ -549,12 +781,23 @@ export default function ScanPage() {
                   <button
                     onClick={handleRescan}
                     style={{
-                      padding: '10px 14px',
-                      borderRadius: 10,
-                      border: '1px solid #e5e7eb',
+                      padding: '14px 20px',
+                      borderRadius: 12,
+                      border: '2px solid #e5e7eb',
                       background: '#fff',
                       color: '#374151',
                       fontWeight: 600,
+                      fontSize: 15,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = '#059669';
+                      e.currentTarget.style.color = '#059669';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = '#e5e7eb';
+                      e.currentTarget.style.color = '#374151';
                     }}
                   >
                     重新扫码
@@ -787,12 +1030,14 @@ export default function ScanPage() {
           right: 0,
           bottom: 0,
           zIndex: 20,
-          background: '#fff',
+          background: 'rgba(255, 255, 255, 0.98)',
+          backdropFilter: 'blur(10px)',
           borderTop: '1px solid #e5e7eb',
-          padding: '10px 12px calc(10px + env(safe-area-inset-bottom))',
+          padding: '12px 16px calc(12px + env(safe-area-inset-bottom))',
           display: 'flex',
-          gap: 8,
+          gap: 10,
           alignItems: 'center',
+          boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.05)',
         }}
       >
         <input
@@ -809,22 +1054,46 @@ export default function ScanPage() {
           }}
           style={{
             flex: 1,
-            padding: '12px 12px',
-            borderRadius: 10,
-            border: '1px solid #e5e7eb',
+            padding: '14px 16px',
+            borderRadius: 12,
+            border: '2px solid #e5e7eb',
             outline: 'none',
             fontSize: 16,
+            background: '#f9fafb',
+            transition: 'all 0.2s ease',
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = '#667eea';
+            e.currentTarget.style.background = '#fff';
+            e.currentTarget.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.1)';
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = '#e5e7eb';
+            e.currentTarget.style.background = '#f9fafb';
+            e.currentTarget.style.boxShadow = 'none';
           }}
         />
         <button
           type="submit"
           style={{
-            padding: '12px 14px',
-            borderRadius: 10,
+            padding: '14px 20px',
+            borderRadius: 12,
             border: 'none',
-            background: '#111827',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             color: '#fff',
             fontWeight: 600,
+            fontSize: 15,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-1px)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.3)';
           }}
         >
           查询
@@ -833,10 +1102,23 @@ export default function ScanPage() {
           type="button"
           onClick={handleClear}
           style={{
-            padding: '12px 14px',
-            borderRadius: 10,
-            border: '1px solid #e5e7eb',
+            padding: '14px 16px',
+            borderRadius: 12,
+            border: '2px solid #e5e7eb',
             background: '#fff',
+            color: '#374151',
+            fontWeight: 600,
+            fontSize: 15,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = '#dc2626';
+            e.currentTarget.style.color = '#dc2626';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = '#e5e7eb';
+            e.currentTarget.style.color = '#374151';
           }}
         >
           清空
@@ -950,18 +1232,7 @@ export default function ScanPage() {
         </div>
       )}
       
-      <style jsx>{`
-        @keyframes slideDown {
-          from {
-            opacity: 0;
-            transform: translateX(-50%) translateY(-20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(-50%) translateY(0);
-          }
-        }
-      `}</style>
-    </div>
+      </div>
+    </>
   );
 }
