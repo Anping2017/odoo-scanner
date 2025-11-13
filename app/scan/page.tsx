@@ -558,30 +558,6 @@ export default function ScanPage() {
             </button>
             <button
               className="top-bar-button"
-              onClick={handleRescan}
-              style={{
-                padding: '8px 12px',
-                borderRadius: 10,
-                border: '1px solid #e5e7eb',
-                background: '#fff',
-                color: '#374151',
-                fontSize: 13,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = '#059669';
-                e.currentTarget.style.color = '#059669';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = '#e5e7eb';
-                e.currentTarget.style.color = '#374151';
-              }}
-            >
-              🔄 重新扫码
-            </button>
-            <button
-              className="top-bar-button"
               onClick={handleLogout}
               style={{
                 padding: '8px 12px',
@@ -708,6 +684,41 @@ export default function ScanPage() {
             >
               <span>👁️</span>
               <span>隐藏</span>
+            </button>
+          </div>
+        )}
+
+        {/* 重新扫码按钮 - 在扫码窗口下方 */}
+        {showScanner && lastCode && (
+          <div style={{
+            marginTop: 12,
+            textAlign: 'center',
+          }}>
+            <button
+              onClick={handleRescan}
+              style={{
+                padding: '10px 20px',
+                borderRadius: 8,
+                border: '1px solid #059669',
+                background: '#fff',
+                color: '#059669',
+                fontSize: 14,
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#10b981';
+                e.currentTarget.style.color = '#10b981';
+                e.currentTarget.style.background = '#f0fdf4';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#059669';
+                e.currentTarget.style.color = '#059669';
+                e.currentTarget.style.background = '#fff';
+              }}
+            >
+              🔄 重新扫码
             </button>
           </div>
         )}
