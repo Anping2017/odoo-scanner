@@ -323,6 +323,61 @@ export default function ScanPage() {
           .camera-container.paused {
             height: 12vh !important;
           }
+          /* 产品信息卡片手机端优化 */
+          .product-card {
+            padding: 16px !important;
+            margin: 0 !important;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+          }
+          .product-card > * {
+            max-width: 100%;
+            box-sizing: border-box;
+          }
+          .product-name {
+            font-size: 16px !important;
+            word-break: break-word;
+            line-height: 1.4 !important;
+          }
+          .product-info-row {
+            flex-direction: column !important;
+            gap: 8px !important;
+            font-size: 12px !important;
+          }
+          .product-info-row span {
+            display: block;
+            margin: 4px 0;
+          }
+          .inventory-info {
+            padding: 10px !important;
+            font-size: 13px !important;
+          }
+          .inventory-info strong {
+            font-size: 16px !important;
+          }
+          .count-input-container {
+            flex-direction: column !important;
+            gap: 12px !important;
+          }
+          .count-input-wrapper {
+            display: flex !important;
+            width: 100% !important;
+          }
+          .count-buttons {
+            display: flex !important;
+            gap: 8px !important;
+            width: 100% !important;
+          }
+          .count-buttons button {
+            flex: 1 !important;
+          }
+          .action-buttons {
+            flex-direction: column !important;
+            gap: 10px !important;
+          }
+          .action-buttons button {
+            width: 100% !important;
+          }
         }
         @media (max-width: 480px) {
           .top-bar-title {
@@ -333,6 +388,39 @@ export default function ScanPage() {
           }
           .camera-container.paused {
             height: 10vh !important;
+          }
+          /* 更小屏幕的进一步优化 */
+          .product-card {
+            padding: 12px !important;
+            border-radius: 12px !important;
+          }
+          .product-name {
+            font-size: 15px !important;
+            margin-bottom: 6px !important;
+          }
+          .product-info-row {
+            font-size: 11px !important;
+          }
+          .inventory-info {
+            padding: 8px !important;
+            font-size: 12px !important;
+          }
+          .inventory-info strong {
+            font-size: 15px !important;
+          }
+          .sales-tabs {
+            flex-wrap: wrap !important;
+            gap: 6px !important;
+          }
+          .sales-tabs button {
+            flex: 1 1 calc(50% - 3px) !important;
+            min-width: calc(50% - 3px) !important;
+            font-size: 11px !important;
+            padding: 5px 8px !important;
+          }
+          .history-item {
+            padding: 8px !important;
+            font-size: 12px !important;
           }
         }
         @media (hover: none) and (pointer: coarse) {
@@ -568,7 +656,7 @@ export default function ScanPage() {
         <div style={{ marginTop: 16, display: 'grid', gap: 16 }}>
           {product ? (
             <div
-              className="card-fade-in"
+              className="card-fade-in product-card"
               style={{
                 background: '#fff',
                 border: '1px solid #e5e7eb',
@@ -576,24 +664,30 @@ export default function ScanPage() {
                 padding: '20px',
                 lineHeight: 1.6,
                 boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
+                maxWidth: '100%',
+                boxSizing: 'border-box',
+                wordWrap: 'break-word',
+                overflowWrap: 'break-word',
               }}
             >
-              <div style={{ fontWeight: 700, fontSize: '18px', marginBottom: 8, color: '#111827' }}>
+              <div className="product-name" style={{ fontWeight: 700, fontSize: '18px', marginBottom: 8, color: '#111827', wordBreak: 'break-word' }}>
                 {product.name}
               </div>
-              <div style={{ color: '#6b7280', fontSize: 13, marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              <div className="product-info-row" style={{ color: '#6b7280', fontSize: 13, marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                 <span>条码：<span style={{ color: '#374151' }}>{product.barcode || '-'}</span></span>
-                <span>|</span>
+                <span style={{ display: 'none' }}>|</span>
                 <span>编码：<span style={{ color: '#374151' }}>{product.default_code || '-'}</span></span>
               </div>
-              <div style={{ 
+              <div className="inventory-info" style={{ 
                 marginTop: 12, 
                 padding: '12px', 
                 background: '#f0f9ff', 
                 borderRadius: '10px',
                 border: '1px solid #bae6fd',
+                maxWidth: '100%',
+                boxSizing: 'border-box',
               }}>
-                <div style={{ fontSize: 14, marginBottom: 6 }}>
+                <div style={{ fontSize: 14, marginBottom: 6, wordBreak: 'break-word' }}>
                   <span style={{ color: '#6b7280' }}>现有库存：</span>
                   <strong style={{ color: '#0369a1', fontSize: '18px' }}>{product.qty_available ?? '-'}</strong>
                   {typeof product.free_qty === 'number' ? (
@@ -602,7 +696,7 @@ export default function ScanPage() {
                     </span>
                   ) : null}
                 </div>
-                <div style={{ fontSize: 13, marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                <div style={{ fontSize: 13, marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '12px', wordBreak: 'break-word' }}>
                   <span style={{ color: '#6b7280' }}>
                     门店零售价：<span style={{ color: '#059669', fontWeight: 600 }}>
                       {typeof product.list_price === 'number' ? `$${product.list_price.toFixed(2)}` : '-'}
@@ -617,7 +711,7 @@ export default function ScanPage() {
                 {/* 只在自定义字段存在时显示 */}
                 {(product.raytech_p3 !== null && product.raytech_p3 !== undefined) || 
                  (product.raytech_stock !== null && product.raytech_stock !== undefined) ? (
-                  <div style={{ marginTop: 8, fontSize: 13, display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                  <div style={{ marginTop: 8, fontSize: 13, display: 'flex', flexWrap: 'wrap', gap: '12px', wordBreak: 'break-word' }}>
                     {typeof product.raytech_p3 === 'number' ? (
                       <span style={{ color: '#6b7280' }}>
                         总部零售价：<span style={{ color: '#059669', fontWeight: 600 }}>${product.raytech_p3.toFixed(2)}</span>
@@ -638,11 +732,11 @@ export default function ScanPage() {
               </div>
 
               {/* 盘点输入区 */}
-              <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid #e5e7eb' }}>
+              <div className="count-input-container" style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid #e5e7eb', maxWidth: '100%', boxSizing: 'border-box' }}>
                 <div style={{ marginBottom: 12 }}>
                   <label style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>盘点数量（调整为）：</label>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <div className="count-input-wrapper" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, width: '100%', maxWidth: '100%' }}>
                   <button
                     onClick={() => {
                       const current = Number(counted) || 0;
@@ -650,6 +744,7 @@ export default function ScanPage() {
                     }}
                     style={{
                       width: 44,
+                      minWidth: 44,
                       height: 44,
                       borderRadius: 12,
                       border: '2px solid #e5e7eb',
@@ -662,6 +757,7 @@ export default function ScanPage() {
                       justifyContent: 'center',
                       cursor: 'pointer',
                       transition: 'all 0.2s ease',
+                      flexShrink: 0,
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.borderColor = '#667eea';
@@ -684,6 +780,7 @@ export default function ScanPage() {
                     onChange={(e) => setCounted(e.target.value)}
                     style={{
                       flex: 1,
+                      minWidth: 0,
                       padding: '12px 16px',
                       borderRadius: 12,
                       border: '2px solid #e5e7eb',
@@ -693,6 +790,8 @@ export default function ScanPage() {
                       textAlign: 'center',
                       background: '#f9fafb',
                       transition: 'all 0.2s ease',
+                      maxWidth: '100%',
+                      boxSizing: 'border-box',
                     }}
                     onFocus={(e) => {
                       e.currentTarget.style.borderColor = '#667eea';
@@ -712,6 +811,7 @@ export default function ScanPage() {
                     }}
                     style={{
                       width: 44,
+                      minWidth: 44,
                       height: 44,
                       borderRadius: 12,
                       border: '2px solid #e5e7eb',
@@ -724,6 +824,7 @@ export default function ScanPage() {
                       justifyContent: 'center',
                       cursor: 'pointer',
                       transition: 'all 0.2s ease',
+                      flexShrink: 0,
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.borderColor = '#667eea';
@@ -740,12 +841,13 @@ export default function ScanPage() {
                     +
                   </button>
                 </div>
-                <div style={{ display: 'flex', gap: 10 }}>
+                <div className="action-buttons" style={{ display: 'flex', gap: 10, width: '100%', maxWidth: '100%' }}>
                   <button
                     onClick={handleUpdateInventory}
                     disabled={updating}
                     style={{
                       flex: 1,
+                      minWidth: 0,
                       padding: '14px 16px',
                       borderRadius: 12,
                       border: 'none',
@@ -784,6 +886,7 @@ export default function ScanPage() {
                       fontSize: 15,
                       cursor: 'pointer',
                       transition: 'all 0.2s ease',
+                      flexShrink: 0,
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.borderColor = '#059669';
@@ -896,7 +999,7 @@ export default function ScanPage() {
               </div>
               
               {/* 页签按钮 */}
-              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <div className="sales-tabs" style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
                 {[
                   { key: '30', label: '最近30天' },
                   { key: '90', label: '最近90天' },
@@ -916,6 +1019,8 @@ export default function ScanPage() {
                       fontWeight: salesPeriod === key ? 600 : 400,
                       cursor: 'pointer',
                       transition: 'all 0.2s',
+                      flex: '1 1 auto',
+                      minWidth: 'calc(25% - 6px)',
                     }}
                   >
                     {label}
@@ -988,22 +1093,26 @@ export default function ScanPage() {
                   {history.map((h) => (
                     <div
                       key={h.id}
+                      className="history-item"
                       style={{
                         border: '1px solid #e5e7eb',
                         borderRadius: 10,
                         padding: 10,
                         fontSize: 13,
                         lineHeight: 1.5,
+                        wordBreak: 'break-word',
+                        maxWidth: '100%',
+                        boxSizing: 'border-box',
                       }}
                     >
                       <div><strong>{h.qty_done}</strong> {h.uom || ''}</div>
-                      <div style={{ color: '#6b7280' }}>
+                      <div style={{ color: '#6b7280', wordBreak: 'break-word' }}>
                         {h.from || '-'} → {h.to || '-'}
                       </div>
-                      <div style={{ color: '#6b7280' }}>
+                      <div style={{ color: '#6b7280', wordBreak: 'break-word' }}>
                         {new Date(h.date).toLocaleString()} | {h.created_by || h.updated_by || ''}
                       </div>
-                      {h.ref ? <div style={{ color: '#6b7280' }}>Ref: {h.ref}</div> : null}
+                      {h.ref ? <div style={{ color: '#6b7280', wordBreak: 'break-word' }}>Ref: {h.ref}</div> : null}
                     </div>
                   ))}
                 </div>
@@ -1032,6 +1141,8 @@ export default function ScanPage() {
           gap: 10,
           alignItems: 'center',
           boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.05)',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
         }}
       >
         <input
@@ -1048,6 +1159,7 @@ export default function ScanPage() {
           }}
           style={{
             flex: 1,
+            minWidth: 0,
             padding: '14px 16px',
             borderRadius: 12,
             border: '2px solid #e5e7eb',
@@ -1055,6 +1167,8 @@ export default function ScanPage() {
             fontSize: 16,
             background: '#f9fafb',
             transition: 'all 0.2s ease',
+            maxWidth: '100%',
+            boxSizing: 'border-box',
           }}
           onFocus={(e) => {
             e.currentTarget.style.borderColor = '#667eea';
@@ -1080,6 +1194,8 @@ export default function ScanPage() {
             cursor: 'pointer',
             transition: 'all 0.2s ease',
             boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.transform = 'translateY(-1px)';
@@ -1105,6 +1221,8 @@ export default function ScanPage() {
             fontSize: 15,
             cursor: 'pointer',
             transition: 'all 0.2s ease',
+            flexShrink: 0,
+            whiteSpace: 'nowrap',
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.borderColor = '#dc2626';

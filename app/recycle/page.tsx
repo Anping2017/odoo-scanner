@@ -372,6 +372,50 @@ export default function DeviceRecyclePage() {
         purchaseOrderId: result.data?.purchaseOrderId,
         orderLineId: result.data?.orderLineId
       });
+      
+      // 保存回收历史记录
+      try {
+        const historyData = {
+          store_name: inspectionInfo.store,
+          operator_name: inspectionInfo.operator,
+          recycle_date: new Date().toISOString().replace('T', ' ').replace('Z', '').split('.')[0],
+          device_type: deviceInfo.deviceType,
+          brand: deviceInfo.brand,
+          model: deviceInfo.model,
+          customer_name: userInfo.customerName,
+          phone: userInfo.phone,
+          email: userInfo.email,
+          recycle_price: inspectionInfo.estimatedValue,
+          condition: inspectionInfo.condition,
+          purchase_order_id: result.data?.purchaseOrderId,
+          order_line_id: result.data?.orderLineId,
+          notes: inspectionInfo.notes,
+          full_data: {
+            deviceInfo: englishDeviceInfo,
+            userInfo: englishUserInfo,
+            inspectionInfo: englishInspectionInfo
+          }
+        };
+        
+        const historyResponse = await fetch('/api/recycle-history', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify(historyData),
+        });
+        
+        if (historyResponse.ok) {
+          console.log('回收历史记录保存成功');
+        } else {
+          console.warn('保存回收历史记录失败:', await historyResponse.text());
+        }
+      } catch (historyError) {
+        console.error('保存回收历史记录时出错:', historyError);
+        // 不阻止成功提示，历史记录保存失败不影响主流程
+      }
+      
       setShowSuccess(true);
     } catch (error) {
       console.error('提交失败:', error);
@@ -516,6 +560,20 @@ export default function DeviceRecyclePage() {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => window.location.href = '/recycle-history'}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 8,
+              border: '1px solid #3b82f6',
+              background: '#fff',
+              color: '#3b82f6',
+              fontSize: 14,
+              cursor: 'pointer',
+            }}
+          >
+            查看历史
+          </button>
           <button
             onClick={() => window.location.href = '/'}
             style={{
