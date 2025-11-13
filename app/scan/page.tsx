@@ -42,6 +42,19 @@ type SalesItem = {
   type?: 'POS' | 'SO' | 'INV'; // 销售类型：POS、销售订单或发票
 };
 
+type PurchaseItem = {
+  id: number;
+  order_name: string;
+  order_id: number;
+  date: string;
+  supplier: string;
+  quantity: number;
+  unit_price: number;
+  total_amount: number;
+  product_id: number;
+  state: string;
+};
+
 export default function ScanPage() {
   const [scanning, setScanning] = useState(true);
   const [showScanner, setShowScanner] = useState(true); // 控制扫码工具显示，默认启动
@@ -54,6 +67,12 @@ export default function ScanPage() {
   const [salesHistory, setSalesHistory] = useState<SalesItem[]>([]);
   const [salesPeriod, setSalesPeriod] = useState<'30' | '90' | '365' | 'all'>('30');
   const [salesLoading, setSalesLoading] = useState(false);
+  const [purchaseHistory, setPurchaseHistory] = useState<PurchaseItem[]>([]);
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
+  const [purchasePage, setPurchasePage] = useState(1);
+  const [purchaseTotal, setPurchaseTotal] = useState(0);
+  const [purchasePageSize] = useState(10);
+  const [activeTab, setActiveTab] = useState<'info' | 'sales' | 'history' | 'purchase'>('info'); // 标签页状态
   const [updating, setUpdating] = useState(false);
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
   const [showImageModal, setShowImageModal] = useState(false);
@@ -93,6 +112,21 @@ export default function ScanPage() {
       setSalesLoading(false);
     }
   }, []);
+
+  const loadPurchaseHistory = useCallback(async (pid: number, page: number = 1) => {
+    setPurchaseLoading(true);
+    try {
+      const res = await fetch(`/api/purchase-history?product_id=${pid}&page=${page}&page_size=${purchasePageSize}`, { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      setPurchaseHistory(Array.isArray(data?.purchases) ? data.purchases : []);
+      setPurchaseTotal(data?.total || 0);
+    } catch {
+      setPurchaseHistory([]);
+      setPurchaseTotal(0);
+    } finally {
+      setPurchaseLoading(false);
+    }
+  }, [purchasePageSize]);
 
   // 获取高分辨率图片
   const fetchHighResImage = useCallback(async () => {
@@ -204,6 +238,20 @@ export default function ScanPage() {
     }
   }, [product?.id, loadSalesHistory]);
 
+  const handlePurchasePageChange = useCallback((page: number) => {
+    setPurchasePage(page);
+    if (product?.id) {
+      loadPurchaseHistory(product.id, page);
+    }
+  }, [product?.id, loadPurchaseHistory]);
+
+  // 当切换到采购标签页时，加载数据
+  useEffect(() => {
+    if (activeTab === 'purchase' && product?.id) {
+      loadPurchaseHistory(product.id, purchasePage);
+    }
+  }, [activeTab, product?.id, purchasePage, loadPurchaseHistory]);
+
   const testPosSales = useCallback(async () => {
     if (!product?.id) {
       console.log('没有产品ID，当前产品:', product);
@@ -308,7 +356,7 @@ export default function ScanPage() {
 
   return (
     <>
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @keyframes slideDown {
           from {
             opacity: 0;
@@ -455,9 +503,32 @@ export default function ScanPage() {
             font-size: 11px !important;
             padding: 5px 8px !important;
           }
+          /* 标签页手机端优化 */
+          .product-card > div > div:first-child {
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+          }
+          .product-card > div > div:first-child button {
+            font-size: 12px !important;
+            padding: 8px 12px !important;
+            white-space: nowrap !important;
+          }
           .history-item {
             padding: 8px !important;
             font-size: 12px !important;
+          }
+          /* Scanner工具条手机端优化 - 统一按钮大小 */
+          .camera-container label,
+          .camera-container button {
+            min-width: calc(50% - 3px) !important;
+            flex: 1 1 calc(50% - 3px) !important;
+            font-size: 12px !important;
+            padding: 8px 12px !important;
+            box-sizing: border-box !important;
+          }
+          .camera-container > div > div:first-child {
+            padding: 6px !important;
+            gap: 6px !important;
           }
         }
         @media (hover: none) and (pointer: coarse) {
@@ -469,7 +540,7 @@ export default function ScanPage() {
             font-size: 16px !important;
           }
         }
-      `}</style>
+      `}} />
       <div
         className="scan-page-container"
         style={{
@@ -669,7 +740,7 @@ export default function ScanPage() {
                 <div>摄像头已暂停</div>
               </div>
             )}
-            {/* 隐藏扫码工具按钮 */}
+            {/* 隐藏扫码工具按钮 - 移到左下角避免遮挡 */}
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -677,8 +748,8 @@ export default function ScanPage() {
               }}
               style={{
                 position: 'absolute',
-                top: 12,
-                right: 12,
+                bottom: 12,
+                left: 12,
                 padding: '8px 12px',
                 borderRadius: 8,
                 border: 'none',
@@ -687,7 +758,7 @@ export default function ScanPage() {
                 fontSize: 12,
                 fontWeight: 600,
                 cursor: 'pointer',
-                zIndex: 100,
+                zIndex: 10,
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
@@ -874,174 +945,521 @@ export default function ScanPage() {
                 ) : null}
               </div>
 
-              {/* 盘点输入区 */}
-              <div className="count-input-container" style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid #e5e7eb', maxWidth: '100%', boxSizing: 'border-box' }}>
-                <div style={{ marginBottom: 12 }}>
-                  <label style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>盘点数量（调整为）：</label>
+              {/* 标签页导航 */}
+              <div style={{ 
+                marginTop: 20, 
+                borderTop: '1px solid #e5e7eb', 
+                paddingTop: 16,
+                maxWidth: '100%',
+                boxSizing: 'border-box',
+              }}>
+                <div style={{
+                  display: 'flex',
+                  gap: 8,
+                  borderBottom: '2px solid #f3f4f6',
+                  marginBottom: 16,
+                  overflowX: 'auto',
+                  WebkitOverflowScrolling: 'touch',
+                }}>
+                  {[
+                    { key: 'info', label: '📦 产品信息', icon: '📦' },
+                    { key: 'sales', label: '💰 销售记录', icon: '💰' },
+                    { key: 'history', label: '📊 库存变动', icon: '📊' },
+                    { key: 'purchase', label: '🛒 采买记录', icon: '🛒' },
+                  ].map((tab) => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setActiveTab(tab.key as any)}
+                      style={{
+                        padding: '10px 16px',
+                        borderRadius: '8px 8px 0 0',
+                        border: 'none',
+                        background: 'transparent',
+                        color: activeTab === tab.key ? '#667eea' : '#6b7280',
+                        fontSize: 14,
+                        fontWeight: activeTab === tab.key ? 600 : 500,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        position: 'relative',
+                        whiteSpace: 'nowrap',
+                        borderBottom: activeTab === tab.key ? '2px solid #667eea' : '2px solid transparent',
+                        marginBottom: activeTab === tab.key ? '-2px' : '0',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (activeTab !== tab.key) {
+                          e.currentTarget.style.color = '#374151';
+                          e.currentTarget.style.background = '#f9fafb';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (activeTab !== tab.key) {
+                          e.currentTarget.style.color = '#6b7280';
+                          e.currentTarget.style.background = 'transparent';
+                        }
+                      }}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
                 </div>
-                <div className="count-input-wrapper" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, width: '100%', maxWidth: '100%' }}>
-                  <button
-                    onClick={() => {
-                      const current = Number(counted) || 0;
-                      setCounted(String(current - 1));
-                    }}
-                    style={{
-                      width: 44,
-                      minWidth: 44,
-                      height: 44,
-                      borderRadius: 12,
-                      border: '2px solid #e5e7eb',
-                      background: '#fff',
-                      color: '#374151',
-                      fontSize: 20,
-                      fontWeight: 600,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      flexShrink: 0,
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = '#667eea';
-                      e.currentTarget.style.color = '#667eea';
-                      e.currentTarget.style.background = '#f0f4ff';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = '#e5e7eb';
-                      e.currentTarget.style.color = '#374151';
-                      e.currentTarget.style.background = '#fff';
-                    }}
-                    title="减少1"
-                  >
-                    −
-                  </button>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={counted}
-                    onChange={(e) => setCounted(e.target.value)}
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      padding: '12px 16px',
-                      borderRadius: 12,
-                      border: '2px solid #e5e7eb',
-                      outline: 'none',
-                      fontSize: 18,
-                      fontWeight: 600,
-                      textAlign: 'center',
-                      background: '#f9fafb',
-                      transition: 'all 0.2s ease',
-                      maxWidth: '100%',
-                      boxSizing: 'border-box',
-                    }}
-                    onFocus={(e) => {
-                      e.currentTarget.style.borderColor = '#667eea';
-                      e.currentTarget.style.background = '#fff';
-                      e.currentTarget.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.1)';
-                    }}
-                    onBlur={(e) => {
-                      e.currentTarget.style.borderColor = '#e5e7eb';
-                      e.currentTarget.style.background = '#f9fafb';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                  />
-                  <button
-                    onClick={() => {
-                      const current = Number(counted) || 0;
-                      setCounted(String(current + 1));
-                    }}
-                    style={{
-                      width: 44,
-                      minWidth: 44,
-                      height: 44,
-                      borderRadius: 12,
-                      border: '2px solid #e5e7eb',
-                      background: '#fff',
-                      color: '#374151',
-                      fontSize: 20,
-                      fontWeight: 600,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      flexShrink: 0,
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = '#667eea';
-                      e.currentTarget.style.color = '#667eea';
-                      e.currentTarget.style.background = '#f0f4ff';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = '#e5e7eb';
-                      e.currentTarget.style.color = '#374151';
-                      e.currentTarget.style.background = '#fff';
-                    }}
-                    title="增加1"
-                  >
-                    +
-                  </button>
-                </div>
-                <div className="action-buttons" style={{ display: 'flex', gap: 10, width: '100%', maxWidth: '100%' }}>
-                  <button
-                    onClick={handleUpdateInventory}
-                    disabled={updating}
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      padding: '14px 16px',
-                      borderRadius: 12,
-                      border: 'none',
-                      background: updating ? '#9ca3af' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      color: '#fff',
-                      fontWeight: 600,
-                      fontSize: 15,
-                      cursor: updating ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s ease',
-                      boxShadow: updating ? 'none' : '0 4px 12px rgba(102, 126, 234, 0.3)',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!updating) {
-                        e.currentTarget.style.transform = 'translateY(-2px)';
-                        e.currentTarget.style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.4)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!updating) {
-                        e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
-                      }
-                    }}
-                  >
-                    {updating ? '更新中…' : '💾 更新库存'}
-                  </button>
-                  <button
-                    onClick={handleRescan}
-                    style={{
-                      padding: '14px 20px',
-                      borderRadius: 12,
-                      border: '2px solid #e5e7eb',
-                      background: '#fff',
-                      color: '#374151',
-                      fontWeight: 600,
-                      fontSize: 15,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      flexShrink: 0,
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = '#059669';
-                      e.currentTarget.style.color = '#059669';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = '#e5e7eb';
-                      e.currentTarget.style.color = '#374151';
-                    }}
-                  >
-                    重新扫码
-                  </button>
+
+                {/* 标签页内容 */}
+                <div style={{ minHeight: '200px', maxHeight: '500px', overflowY: 'auto' }}>
+                  {/* 产品信息标签页 */}
+                  {activeTab === 'info' && (
+                    <div>
+                      {/* 盘点输入区 */}
+                      <div className="count-input-container" style={{ marginTop: 0, maxWidth: '100%', boxSizing: 'border-box' }}>
+                        <div style={{ marginBottom: 12 }}>
+                          <label style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>盘点数量（调整为）：</label>
+                        </div>
+                        <div className="count-input-wrapper" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, width: '100%', maxWidth: '100%' }}>
+                          <button
+                            onClick={() => {
+                              const current = Number(counted) || 0;
+                              setCounted(String(current - 1));
+                            }}
+                            style={{
+                              width: 44,
+                              minWidth: 44,
+                              height: 44,
+                              borderRadius: 12,
+                              border: '2px solid #e5e7eb',
+                              background: '#fff',
+                              color: '#374151',
+                              fontSize: 20,
+                              fontWeight: 600,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              flexShrink: 0,
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.borderColor = '#667eea';
+                              e.currentTarget.style.color = '#667eea';
+                              e.currentTarget.style.background = '#f0f4ff';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.borderColor = '#e5e7eb';
+                              e.currentTarget.style.color = '#374151';
+                              e.currentTarget.style.background = '#fff';
+                            }}
+                            title="减少1"
+                          >
+                            −
+                          </button>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={counted}
+                            onChange={(e) => setCounted(e.target.value)}
+                            style={{
+                              flex: 1,
+                              minWidth: 0,
+                              padding: '12px 16px',
+                              borderRadius: 12,
+                              border: '2px solid #e5e7eb',
+                              outline: 'none',
+                              fontSize: 18,
+                              fontWeight: 600,
+                              textAlign: 'center',
+                              background: '#f9fafb',
+                              transition: 'all 0.2s ease',
+                              maxWidth: '100%',
+                              boxSizing: 'border-box',
+                            }}
+                            onFocus={(e) => {
+                              e.currentTarget.style.borderColor = '#667eea';
+                              e.currentTarget.style.background = '#fff';
+                              e.currentTarget.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.1)';
+                            }}
+                            onBlur={(e) => {
+                              e.currentTarget.style.borderColor = '#e5e7eb';
+                              e.currentTarget.style.background = '#f9fafb';
+                              e.currentTarget.style.boxShadow = 'none';
+                            }}
+                          />
+                          <button
+                            onClick={() => {
+                              const current = Number(counted) || 0;
+                              setCounted(String(current + 1));
+                            }}
+                            style={{
+                              width: 44,
+                              minWidth: 44,
+                              height: 44,
+                              borderRadius: 12,
+                              border: '2px solid #e5e7eb',
+                              background: '#fff',
+                              color: '#374151',
+                              fontSize: 20,
+                              fontWeight: 600,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              flexShrink: 0,
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.borderColor = '#667eea';
+                              e.currentTarget.style.color = '#667eea';
+                              e.currentTarget.style.background = '#f0f4ff';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.borderColor = '#e5e7eb';
+                              e.currentTarget.style.color = '#374151';
+                              e.currentTarget.style.background = '#fff';
+                            }}
+                            title="增加1"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <div className="action-buttons" style={{ display: 'flex', gap: 10, width: '100%', maxWidth: '100%' }}>
+                          <button
+                            onClick={handleUpdateInventory}
+                            disabled={updating}
+                            style={{
+                              flex: 1,
+                              minWidth: 0,
+                              padding: '14px 16px',
+                              borderRadius: 12,
+                              border: 'none',
+                              background: updating ? '#9ca3af' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                              color: '#fff',
+                              fontWeight: 600,
+                              fontSize: 15,
+                              cursor: updating ? 'not-allowed' : 'pointer',
+                              transition: 'all 0.2s ease',
+                              boxShadow: updating ? 'none' : '0 4px 12px rgba(102, 126, 234, 0.3)',
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!updating) {
+                                e.currentTarget.style.transform = 'translateY(-2px)';
+                                e.currentTarget.style.boxShadow = '0 6px 16px rgba(102, 126, 234, 0.4)';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!updating) {
+                                e.currentTarget.style.transform = 'translateY(0)';
+                                e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.3)';
+                              }
+                            }}
+                          >
+                            {updating ? '更新中…' : '💾 更新库存'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 销售记录标签页 */}
+                  {activeTab === 'sales' && (
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <div style={{ fontSize: 13, color: '#6b7280' }}>选择时间范围查看销售记录</div>
+                        <button
+                          onClick={testPosSales}
+                          style={{
+                            padding: '4px 8px',
+                            borderRadius: 4,
+                            border: '1px solid #d1d5db',
+                            background: '#f9fafb',
+                            color: '#374151',
+                            fontSize: 10,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          调试POS
+                        </button>
+                      </div>
+                      
+                      {/* 页签按钮 */}
+                      <div className="sales-tabs" style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+                        {[
+                          { key: '30', label: '最近30天' },
+                          { key: '90', label: '最近90天' },
+                          { key: '365', label: '最近365天' },
+                          { key: 'all', label: '所有' }
+                        ].map(({ key, label }) => (
+                          <button
+                            key={key}
+                            onClick={() => handleSalesPeriodChange(key as any)}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: 6,
+                              border: '1px solid #d1d5db',
+                              background: salesPeriod === key ? '#3b82f6' : '#fff',
+                              color: salesPeriod === key ? '#fff' : '#374151',
+                              fontSize: 12,
+                              fontWeight: salesPeriod === key ? 600 : 400,
+                              cursor: 'pointer',
+                              transition: 'all 0.2s',
+                              flex: '1 1 auto',
+                              minWidth: 'calc(25% - 6px)',
+                            }}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* 销售记录列表 */}
+                      {salesLoading ? (
+                        <div style={{ textAlign: 'center', padding: '20px 0', color: '#6b7280' }}>
+                          加载中...
+                        </div>
+                      ) : salesHistory.length > 0 ? (
+                        <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                          {salesHistory.map((sale) => (
+                            <div
+                              key={sale.id}
+                              style={{
+                                padding: '12px',
+                                borderBottom: '1px solid #f3f4f6',
+                                fontSize: 13,
+                                borderRadius: 8,
+                                marginBottom: 8,
+                                background: '#f9fafb',
+                                transition: 'all 0.2s ease',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = '#f3f4f6';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = '#f9fafb';
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, alignItems: 'center' }}>
+                                <span style={{ fontWeight: 600, color: '#374151', fontSize: 14 }}>
+                                  {sale.order_name}
+                                  {sale.type && (
+                                    <span style={{ 
+                                      fontSize: 10, 
+                                      color: sale.type === 'POS' ? '#059669' : sale.type === 'INV' ? '#dc2626' : '#3b82f6',
+                                      marginLeft: 6,
+                                      padding: '2px 6px',
+                                      borderRadius: 4,
+                                      backgroundColor: sale.type === 'POS' ? '#d1fae5' : sale.type === 'INV' ? '#fee2e2' : '#dbeafe'
+                                    }}>
+                                      {sale.type === 'POS' ? 'POS' : sale.type === 'INV' ? '发票' : 'SO'}
+                                    </span>
+                                  )}
+                                </span>
+                                <span style={{ color: '#059669', fontWeight: 700, fontSize: 15 }}>
+                                  ${sale.total_amount.toFixed(2)}
+                                </span>
+                              </div>
+                              <div style={{ color: '#6b7280', marginBottom: 4, fontSize: 12 }}>
+                                客户: {sale.customer}
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#6b7280', fontSize: 12 }}>
+                                <span>{sale.date}</span>
+                                <span>{sale.quantity} × ${sale.unit_price.toFixed(2)}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#6b7280' }}>
+                          <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.3 }}>💰</div>
+                          <div style={{ fontSize: 14 }}>暂无销售记录</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 库存变动记录标签页 */}
+                  {activeTab === 'history' && (
+                    <div>
+                      <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>
+                        最近5条库存变动记录
+                      </div>
+                      {history.length ? (
+                        <div style={{ display: 'grid', gap: 10 }}>
+                          {history.map((h) => (
+                            <div
+                              key={h.id}
+                              className="history-item"
+                              style={{
+                                border: '1px solid #e5e7eb',
+                                borderRadius: 10,
+                                padding: 12,
+                                fontSize: 13,
+                                lineHeight: 1.6,
+                                wordBreak: 'break-word',
+                                maxWidth: '100%',
+                                boxSizing: 'border-box',
+                                background: '#f9fafb',
+                                transition: 'all 0.2s ease',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = '#f3f4f6';
+                                e.currentTarget.style.borderColor = '#d1d5db';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = '#f9fafb';
+                                e.currentTarget.style.borderColor = '#e5e7eb';
+                              }}
+                            >
+                              <div style={{ marginBottom: 6 }}>
+                                <strong style={{ color: '#667eea', fontSize: 15 }}>{h.qty_done}</strong>
+                                <span style={{ color: '#6b7280', marginLeft: 4 }}>{h.uom || ''}</span>
+                              </div>
+                              <div style={{ color: '#6b7280', marginBottom: 4, wordBreak: 'break-word' }}>
+                                <span style={{ color: '#374151' }}>{h.from || '-'}</span>
+                                <span style={{ margin: '0 8px', color: '#9ca3af' }}>→</span>
+                                <span style={{ color: '#374151' }}>{h.to || '-'}</span>
+                              </div>
+                              <div style={{ color: '#6b7280', fontSize: 12, marginBottom: 4, wordBreak: 'break-word' }}>
+                                {new Date(h.date).toLocaleString('zh-CN')} | {h.created_by || h.updated_by || '系统'}
+                              </div>
+                              {h.ref && (
+                                <div style={{ color: '#667eea', fontSize: 12, wordBreak: 'break-word' }}>
+                                  📎 Ref: {h.ref}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#6b7280' }}>
+                          <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.3 }}>📊</div>
+                          <div style={{ fontSize: 14 }}>暂无库存变动记录</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 采买记录标签页 */}
+                  {activeTab === 'purchase' && (
+                    <div>
+                      <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>
+                        所有采购历史记录
+                      </div>
+                      {purchaseLoading ? (
+                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#6b7280' }}>
+                          <div style={{ fontSize: 14 }}>加载中...</div>
+                        </div>
+                      ) : purchaseHistory.length > 0 ? (
+                        <>
+                          <div style={{ maxHeight: '400px', overflowY: 'auto', marginBottom: 16 }}>
+                            {purchaseHistory.map((purchase) => (
+                              <div
+                                key={purchase.id}
+                                style={{
+                                  padding: '12px',
+                                  borderBottom: '1px solid #f3f4f6',
+                                  fontSize: 13,
+                                  borderRadius: 8,
+                                  marginBottom: 8,
+                                  background: '#f9fafb',
+                                  transition: 'all 0.2s ease',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = '#f3f4f6';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = '#f9fafb';
+                                }}
+                              >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, alignItems: 'center' }}>
+                                  <span style={{ fontWeight: 600, color: '#374151', fontSize: 14 }}>
+                                    {purchase.order_name}
+                                    <span style={{ 
+                                      fontSize: 10, 
+                                      color: purchase.state === 'purchase' ? '#059669' : purchase.state === 'done' ? '#3b82f6' : '#6b7280',
+                                      marginLeft: 6,
+                                      padding: '2px 6px',
+                                      borderRadius: 4,
+                                      backgroundColor: purchase.state === 'purchase' ? '#d1fae5' : purchase.state === 'done' ? '#dbeafe' : '#f3f4f6'
+                                    }}>
+                                      {purchase.state === 'purchase' ? '已确认' : purchase.state === 'done' ? '已完成' : purchase.state === 'draft' ? '草稿' : purchase.state}
+                                    </span>
+                                  </span>
+                                  <span style={{ color: '#dc2626', fontWeight: 700, fontSize: 15 }}>
+                                    ${purchase.total_amount.toFixed(2)}
+                                  </span>
+                                </div>
+                                <div style={{ color: '#6b7280', marginBottom: 4, fontSize: 12 }}>
+                                  供应商: {purchase.supplier}
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#6b7280', fontSize: 12 }}>
+                                  <span>{new Date(purchase.date).toLocaleDateString('zh-CN')}</span>
+                                  <span>{purchase.quantity} × ${purchase.unit_price.toFixed(2)}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          
+                          {/* 分页控件 */}
+                          {Math.ceil(purchaseTotal / purchasePageSize) > 1 && (
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              gap: 8,
+                              padding: '12px 0',
+                              borderTop: '1px solid #e5e7eb',
+                            }}>
+                              <button
+                                onClick={() => handlePurchasePageChange(purchasePage - 1)}
+                                disabled={purchasePage <= 1}
+                                style={{
+                                  padding: '8px 12px',
+                                  borderRadius: 6,
+                                  border: '1px solid #d1d5db',
+                                  background: purchasePage <= 1 ? '#f3f4f6' : '#fff',
+                                  color: purchasePage <= 1 ? '#9ca3af' : '#374151',
+                                  fontSize: 12,
+                                  fontWeight: 500,
+                                  cursor: purchasePage <= 1 ? 'not-allowed' : 'pointer',
+                                  transition: 'all 0.2s ease',
+                                }}
+                              >
+                                上一页
+                              </button>
+                              <div style={{
+                                fontSize: 12,
+                                color: '#6b7280',
+                                padding: '0 12px',
+                              }}>
+                                第 {purchasePage} / {Math.ceil(purchaseTotal / purchasePageSize)} 页
+                                <span style={{ marginLeft: 8, color: '#9ca3af' }}>
+                                  (共 {purchaseTotal} 条)
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => handlePurchasePageChange(purchasePage + 1)}
+                                disabled={purchasePage >= Math.ceil(purchaseTotal / purchasePageSize)}
+                                style={{
+                                  padding: '8px 12px',
+                                  borderRadius: 6,
+                                  border: '1px solid #d1d5db',
+                                  background: purchasePage >= Math.ceil(purchaseTotal / purchasePageSize) ? '#f3f4f6' : '#fff',
+                                  color: purchasePage >= Math.ceil(purchaseTotal / purchasePageSize) ? '#9ca3af' : '#374151',
+                                  fontSize: 12,
+                                  fontWeight: 500,
+                                  cursor: purchasePage >= Math.ceil(purchaseTotal / purchasePageSize) ? 'not-allowed' : 'pointer',
+                                  transition: 'all 0.2s ease',
+                                }}
+                              >
+                                下一页
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#6b7280' }}>
+                          <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.3 }}>🛒</div>
+                          <div style={{ fontSize: 14 }}>暂无采购记录</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1113,157 +1531,6 @@ export default function ScanPage() {
             </div>
           )}
 
-          {/* 销售记录页签 */}
-          {product && (
-            <div
-              style={{
-                background: '#fff',
-                border: '1px solid #e5e7eb',
-                borderRadius: 12,
-                padding: 14,
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>销售记录</div>
-                <button
-                  onClick={testPosSales}
-                  style={{
-                    padding: '4px 8px',
-                    borderRadius: 4,
-                    border: '1px solid #d1d5db',
-                    background: '#f9fafb',
-                    color: '#374151',
-                    fontSize: 10,
-                    cursor: 'pointer',
-                  }}
-                >
-                  调试POS
-                </button>
-              </div>
-              
-              {/* 页签按钮 */}
-              <div className="sales-tabs" style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-                {[
-                  { key: '30', label: '最近30天' },
-                  { key: '90', label: '最近90天' },
-                  { key: '365', label: '最近365天' },
-                  { key: 'all', label: '所有' }
-                ].map(({ key, label }) => (
-                  <button
-                    key={key}
-                    onClick={() => handleSalesPeriodChange(key as any)}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: 6,
-                      border: '1px solid #d1d5db',
-                      background: salesPeriod === key ? '#3b82f6' : '#fff',
-                      color: salesPeriod === key ? '#fff' : '#374151',
-                      fontSize: 12,
-                      fontWeight: salesPeriod === key ? 600 : 400,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      flex: '1 1 auto',
-                      minWidth: 'calc(25% - 6px)',
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-
-              {/* 销售记录列表 */}
-              {salesLoading ? (
-                <div style={{ textAlign: 'center', padding: '20px 0', color: '#6b7280' }}>
-                  加载中...
-                </div>
-              ) : salesHistory.length > 0 ? (
-                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                  {salesHistory.map((sale) => (
-                    <div
-                      key={sale.id}
-                      style={{
-                        padding: '8px 0',
-                        borderBottom: '1px solid #f3f4f6',
-                        fontSize: 12,
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <span style={{ fontWeight: 600, color: '#374151' }}>
-                          {sale.order_name}
-                          {sale.type && (
-                            <span style={{ 
-                              fontSize: 10, 
-                              color: sale.type === 'POS' ? '#059669' : sale.type === 'INV' ? '#dc2626' : '#3b82f6',
-                              marginLeft: 6,
-                              padding: '2px 6px',
-                              borderRadius: 4,
-                              backgroundColor: sale.type === 'POS' ? '#d1fae5' : sale.type === 'INV' ? '#fee2e2' : '#dbeafe'
-                            }}>
-                              {sale.type === 'POS' ? 'POS' : sale.type === 'INV' ? '发票' : 'SO'}
-                            </span>
-                          )}
-                        </span>
-                        <span style={{ color: '#059669', fontWeight: 600 }}>
-                          ${sale.total_amount.toFixed(2)}
-                        </span>
-                      </div>
-                      <div style={{ color: '#6b7280', marginBottom: 2 }}>
-                        客户: {sale.customer}
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#6b7280' }}>
-                        <span>{sale.date}</span>
-                        <span>{sale.quantity} × ${sale.unit_price.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ textAlign: 'center', padding: '20px 0', color: '#6b7280' }}>
-                  暂无销售记录
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 最近调整记录 */}
-          {product ? (
-            <div
-              style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14 }}
-            >
-              <div style={{ fontWeight: 700, marginBottom: 8 }}>最近库存变动记录</div>
-              {history.length ? (
-                <div style={{ display: 'grid', gap: 8 }}>
-                  {history.map((h) => (
-                    <div
-                      key={h.id}
-                      className="history-item"
-                      style={{
-                        border: '1px solid #e5e7eb',
-                        borderRadius: 10,
-                        padding: 10,
-                        fontSize: 13,
-                        lineHeight: 1.5,
-                        wordBreak: 'break-word',
-                        maxWidth: '100%',
-                        boxSizing: 'border-box',
-                      }}
-                    >
-                      <div><strong>{h.qty_done}</strong> {h.uom || ''}</div>
-                      <div style={{ color: '#6b7280', wordBreak: 'break-word' }}>
-                        {h.from || '-'} → {h.to || '-'}
-                      </div>
-                      <div style={{ color: '#6b7280', wordBreak: 'break-word' }}>
-                        {new Date(h.date).toLocaleString()} | {h.created_by || h.updated_by || ''}
-                      </div>
-                      {h.ref ? <div style={{ color: '#6b7280', wordBreak: 'break-word' }}>Ref: {h.ref}</div> : null}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ color: '#6b7280', fontSize: 13 }}>暂无记录</div>
-              )}
-            </div>
-          ) : null}
         </div>
       </div>
 

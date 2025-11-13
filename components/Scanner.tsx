@@ -574,12 +574,16 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
   }
 
   const btnStyle: React.CSSProperties = { 
-    padding: '8px 12px', 
+    padding: '8px 16px', 
     borderRadius: 8, 
     border: '1px solid #ddd', 
     background: '#fff',
     fontSize: '14px',
-    cursor: 'pointer'
+    cursor: 'pointer',
+    minWidth: '120px',
+    textAlign: 'center',
+    whiteSpace: 'nowrap',
+    transition: 'all 0.2s ease',
   };
 
   return (
@@ -596,8 +600,21 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
         }
       `}</style>
       {/* 工具条 */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '8px' }}>
-        <label style={{ ...btnStyle, cursor: 'pointer', display: 'inline-block' }}>
+      <div style={{ 
+        display: 'flex', 
+        gap: 8, 
+        alignItems: 'center', 
+        flexWrap: 'wrap', 
+        padding: '8px',
+        justifyContent: 'center',
+      }}>
+        <label style={{ 
+          ...btnStyle, 
+          cursor: 'pointer', 
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
           从相册选择
           <input 
             type="file" 
@@ -613,12 +630,25 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
             ...btnStyle,
             backgroundColor: code93Mode ? '#10b981' : '#fff',
             color: code93Mode ? '#fff' : '#000',
-            fontWeight: code93Mode ? 600 : 400
+            fontWeight: code93Mode ? 600 : 400,
+            borderColor: code93Mode ? '#10b981' : '#ddd',
           }}
           onClick={() => {
             setCode93Mode(!code93Mode);
             // 重新初始化识别器
             readerRef.current = null;
+          }}
+          onMouseEnter={(e) => {
+            if (!code93Mode) {
+              e.currentTarget.style.borderColor = '#10b981';
+              e.currentTarget.style.color = '#10b981';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!code93Mode) {
+              e.currentTarget.style.borderColor = '#ddd';
+              e.currentTarget.style.color = '#000';
+            }
           }}
         >
           {code93Mode ? 'Code 93专用' : '兼容所有条码'}
