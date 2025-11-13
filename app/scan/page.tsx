@@ -345,17 +345,28 @@ export default function ScanPage() {
           .product-card {
             padding: 16px !important;
             margin: 0 !important;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            word-wrap: break-word !important;
+            overflow-wrap: break-word !important;
+            overflow: hidden !important;
+            box-sizing: border-box !important;
           }
           .product-card > * {
-            max-width: 100%;
-            box-sizing: border-box;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            box-sizing: border-box !important;
+            word-wrap: break-word !important;
+            overflow-wrap: break-word !important;
           }
           .product-name {
             font-size: 16px !important;
-            word-break: break-word;
+            word-break: break-word !important;
             line-height: 1.4 !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            overflow-wrap: break-word !important;
           }
           .product-info-row {
             flex-direction: column !important;
@@ -411,10 +422,18 @@ export default function ScanPage() {
           .product-card {
             padding: 12px !important;
             border-radius: 12px !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            overflow: hidden !important;
           }
           .product-name {
             font-size: 15px !important;
             margin-bottom: 6px !important;
+            max-width: 100% !important;
+            min-width: 0 !important;
+            word-break: break-word !important;
+            overflow-wrap: break-word !important;
           }
           .product-info-row {
             font-size: 11px !important;
@@ -585,7 +604,7 @@ export default function ScanPage() {
         </div>
 
       {/* 摄像头区域 */}
-      <div style={{ padding: '16px' }}>
+      <div style={{ padding: '16px', width: '100%', maxWidth: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
         {!showScanner ? (
           <div
             style={{
@@ -750,7 +769,7 @@ export default function ScanPage() {
         ) : null}
 
         {/* 结果 + 盘点输入 */}
-        <div style={{ marginTop: 16, display: 'grid', gap: 16 }}>
+        <div style={{ marginTop: 16, display: 'grid', gap: 16, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
           {product ? (
             <div
               className="card-fade-in product-card"
@@ -761,19 +780,46 @@ export default function ScanPage() {
                 padding: '20px',
                 lineHeight: 1.6,
                 boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
+                width: '100%',
                 maxWidth: '100%',
+                minWidth: 0,
                 boxSizing: 'border-box',
                 wordWrap: 'break-word',
                 overflowWrap: 'break-word',
+                overflow: 'hidden',
               }}
             >
-              <div className="product-name" style={{ fontWeight: 700, fontSize: '18px', marginBottom: 8, color: '#111827', wordBreak: 'break-word' }}>
+              <div className="product-name" style={{ 
+                fontWeight: 700, 
+                fontSize: '18px', 
+                marginBottom: 8, 
+                color: '#111827', 
+                wordBreak: 'break-word',
+                overflowWrap: 'break-word',
+                maxWidth: '100%',
+                minWidth: 0,
+                width: '100%',
+                boxSizing: 'border-box',
+              }}>
                 {product.name}
               </div>
-              <div className="product-info-row" style={{ color: '#6b7280', fontSize: 13, marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                <span>条码：<span style={{ color: '#374151' }}>{product.barcode || '-'}</span></span>
+              <div className="product-info-row" style={{ 
+                color: '#6b7280', 
+                fontSize: 13, 
+                marginBottom: 12, 
+                display: 'flex', 
+                flexWrap: 'wrap', 
+                gap: '8px',
+                maxWidth: '100%',
+                minWidth: 0,
+                width: '100%',
+                boxSizing: 'border-box',
+                wordBreak: 'break-word',
+                overflowWrap: 'break-word',
+              }}>
+                <span style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>条码：<span style={{ color: '#374151' }}>{product.barcode || '-'}</span></span>
                 <span style={{ display: 'none' }}>|</span>
-                <span>编码：<span style={{ color: '#374151' }}>{product.default_code || '-'}</span></span>
+                <span style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>编码：<span style={{ color: '#374151' }}>{product.default_code || '-'}</span></span>
               </div>
               <div className="inventory-info" style={{ 
                 marginTop: 12, 
