@@ -221,64 +221,151 @@ export default function ReceivingDetailPage({ params }: { params: { id: string }
   }
 
   return (
-    <div style={{ padding: 16, maxWidth: 800, margin: 'auto' }}>
-      {/* 头部 */}
-      <div style={{
-        background: '#fff',
-        border: '1px solid #e5e7eb',
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 16,
-        boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        position: 'sticky',
-        top: 0,
-        zIndex: 10
-      }}>
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 600, color: '#111827' }}>
-            收货订单详情
+    <>
+      <style>{`
+        @media (max-width: 768px) {
+          .detail-header {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 12px !important;
+          }
+          .detail-header-buttons {
+            width: 100% !important;
+            display: flex !important;
+            gap: 8px !important;
+          }
+          .detail-header-buttons button {
+            flex: 1 !important;
+          }
+          .order-info-grid {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+          }
+          .product-controls {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 12px !important;
+          }
+          .product-control-buttons {
+            width: 100% !important;
+            display: flex !important;
+            flex-wrap: wrap !important;
+            gap: 6px !important;
+          }
+          .product-control-buttons button {
+            flex: 1 1 calc(50% - 3px) !important;
+            min-width: calc(50% - 3px) !important;
+          }
+          .product-item-content {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 12px !important;
+          }
+          .product-item-right {
+            width: 100% !important;
+            text-align: left !important;
+            display: flex !important;
+            flex-wrap: wrap !important;
+            gap: 8px !important;
+          }
+          .product-item-right > div {
+            flex: 1 1 calc(33.333% - 6px) !important;
+            min-width: 100px !important;
+          }
+          .lot-serial-input {
+            flex-direction: column !important;
+            gap: 8px !important;
+          }
+          .lot-serial-input label {
+            min-width: auto !important;
+          }
+        }
+        @media (max-width: 480px) {
+          .detail-title {
+            font-size: 16px !important;
+          }
+          .detail-subtitle {
+            font-size: 12px !important;
+          }
+          .product-name {
+            font-size: 14px !important;
+          }
+          .product-code {
+            font-size: 11px !important;
+          }
+        }
+        @media (hover: none) and (pointer: coarse) {
+          button {
+            min-height: 44px;
+          }
+          input {
+            min-height: 44px;
+            font-size: 16px !important;
+          }
+        }
+      `}</style>
+      <div style={{ padding: 16, maxWidth: 800, margin: 'auto', width: '100%', boxSizing: 'border-box' }}>
+        {/* 头部 */}
+        <div className="detail-header" style={{
+          background: '#fff',
+          border: '1px solid #e5e7eb',
+          borderRadius: 12,
+          padding: 16,
+          marginBottom: 16,
+          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+        }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="detail-title" style={{ fontSize: 18, fontWeight: 600, color: '#111827', wordBreak: 'break-word' }}>
+              收货订单详情
+            </div>
+            <div className="detail-subtitle" style={{ fontSize: 14, color: '#6b7280', marginTop: 4, wordBreak: 'break-word' }}>
+              {order.name} • {order.warehouse}
+            </div>
           </div>
-          <div style={{ fontSize: 14, color: '#6b7280', marginTop: 4 }}>
-            {order.name} • {order.warehouse}
+          <div className="detail-header-buttons" style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button
+              onClick={confirmAllProducts}
+              disabled={confirming || !order || order.products.length === 0}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 8,
+                border: 'none',
+                background: confirming || !order || order.products.length === 0 ? '#9ca3af' : '#059669',
+                color: '#fff',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: confirming || !order || order.products.length === 0 ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {confirming ? '入库中...' : '一键入库'}
+            </button>
+            <button
+              onClick={() => router.push('/receiving')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 8,
+                border: '1px solid #e5e7eb',
+                background: '#fff',
+                color: '#374151',
+                fontSize: 14,
+                fontWeight: 500,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              返回列表
+            </button>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={confirmAllProducts}
-            disabled={confirming || !order || order.products.length === 0}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 8,
-              border: 'none',
-              background: confirming || !order || order.products.length === 0 ? '#9ca3af' : '#059669',
-              color: '#fff',
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: confirming || !order || order.products.length === 0 ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {confirming ? '入库中...' : '一键入库'}
-          </button>
-          <button
-            onClick={() => router.push('/receiving')}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 8,
-              border: '1px solid #e5e7eb',
-              background: '#fff',
-              color: '#374151',
-              fontSize: 14,
-              fontWeight: 500,
-              cursor: 'pointer',
-            }}
-          >
-            返回列表
-          </button>
-        </div>
-      </div>
 
       {/* 订单信息 */}
       <div style={{
@@ -288,19 +375,21 @@ export default function ReceivingDetailPage({ params }: { params: { id: string }
         padding: 16,
         marginBottom: 16,
         boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
       }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+        <div className="order-info-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
           <div>
             <div style={{ fontSize: 12, color: '#6b7280' }}>订单名称</div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{order.name}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', wordBreak: 'break-word' }}>{order.name}</div>
           </div>
           <div>
             <div style={{ fontSize: 12, color: '#6b7280' }}>供应商</div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{order.supplier}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', wordBreak: 'break-word' }}>{order.supplier}</div>
           </div>
           <div>
             <div style={{ fontSize: 12, color: '#6b7280' }}>仓库</div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{order.warehouse}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', wordBreak: 'break-word' }}>{order.warehouse}</div>
           </div>
           <div>
             <div style={{ fontSize: 12, color: '#6b7280' }}>订单日期</div>
@@ -310,7 +399,7 @@ export default function ReceivingDetailPage({ params }: { params: { id: string }
           </div>
           <div>
             <div style={{ fontSize: 12, color: '#6b7280' }}>状态</div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{order.state}</div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#111827', wordBreak: 'break-word' }}>{order.state}</div>
           </div>
         </div>
       </div>
@@ -323,12 +412,14 @@ export default function ReceivingDetailPage({ params }: { params: { id: string }
         padding: 16,
         marginBottom: 16,
         boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div className="product-controls" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div style={{ fontSize: 16, fontWeight: 600, color: '#111827' }}>
             待入库产品 ({order.products.length}个)
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="product-control-buttons" style={{ display: 'flex', gap: 8 }}>
             <button
               onClick={selectAllProducts}
               style={{
@@ -339,6 +430,7 @@ export default function ReceivingDetailPage({ params }: { params: { id: string }
                 color: '#374151',
                 fontSize: 12,
                 cursor: 'pointer',
+                whiteSpace: 'nowrap',
               }}
             >
               全选
@@ -353,6 +445,7 @@ export default function ReceivingDetailPage({ params }: { params: { id: string }
                 color: '#374151',
                 fontSize: 12,
                 cursor: 'pointer',
+                whiteSpace: 'nowrap',
               }}
             >
               清空
@@ -369,6 +462,7 @@ export default function ReceivingDetailPage({ params }: { params: { id: string }
                 fontSize: 12,
                 fontWeight: 600,
                 cursor: confirming || selectedProducts.size === 0 ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap',
               }}
             >
               {confirming ? '确认中...' : `确认入库 (${selectedProducts.size})`}
@@ -390,13 +484,16 @@ export default function ReceivingDetailPage({ params }: { params: { id: string }
               boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
               cursor: 'pointer',
               transition: 'all 0.2s',
+              maxWidth: '100%',
+              boxSizing: 'border-box',
             }}
             onClick={() => toggleProductSelection(product.id)}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div className="product-item-content" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{
                 width: 20,
                 height: 20,
+                minWidth: 20,
                 borderRadius: 4,
                 border: '2px solid #d1d5db',
                 background: selectedProducts.has(product.id) ? '#3b82f6' : '#fff',
@@ -406,21 +503,23 @@ export default function ReceivingDetailPage({ params }: { params: { id: string }
                 color: '#fff',
                 fontSize: 12,
                 fontWeight: 600,
+                flexShrink: 0,
               }}>
                 {selectedProducts.has(product.id) && '✓'}
               </div>
               
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 16, fontWeight: 600, color: '#111827' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="product-name" style={{ fontSize: 16, fontWeight: 600, color: '#111827', wordBreak: 'break-word' }}>
                   {product.product_name}
                 </div>
-                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+                <div className="product-code" style={{ fontSize: 12, color: '#6b7280', marginTop: 4, wordBreak: 'break-word' }}>
                   {product.product_code && `编码: ${product.product_code}`}
-                  {product.product_barcode && ` • 条码: ${product.product_barcode}`}
+                  {product.product_code && product.product_barcode && ` • `}
+                  {product.product_barcode && `条码: ${product.product_barcode}`}
                 </div>
               </div>
               
-              <div style={{ textAlign: 'right', minWidth: 150 }}>
+              <div className="product-item-right" style={{ textAlign: 'right', minWidth: 150, flexShrink: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: '#dc2626' }}>
                   待入库: {product.qty_to_receive}
                 </div>
@@ -440,9 +539,11 @@ export default function ReceivingDetailPage({ params }: { params: { id: string }
                 padding: 12, 
                 background: '#f9fafb', 
                 borderRadius: 8,
-                border: '1px solid #e5e7eb'
+                border: '1px solid #e5e7eb',
+                maxWidth: '100%',
+                boxSizing: 'border-box',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div className="lot-serial-input" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <label style={{ 
                     fontSize: 12, 
                     fontWeight: 600, 
@@ -459,11 +560,14 @@ export default function ReceivingDetailPage({ params }: { params: { id: string }
                     placeholder={`请输入${product.tracking === 'serial' ? '序列号' : '批次号'}`}
                     style={{
                       flex: 1,
+                      minWidth: 0,
                       padding: '6px 8px',
                       border: '1px solid #d1d5db',
                       borderRadius: 4,
                       fontSize: 12,
-                      background: '#fff'
+                      background: '#fff',
+                      maxWidth: '100%',
+                      boxSizing: 'border-box',
                     }}
                   />
                 </div>
@@ -496,6 +600,7 @@ export default function ReceivingDetailPage({ params }: { params: { id: string }
           {toast.message}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

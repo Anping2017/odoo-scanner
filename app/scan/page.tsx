@@ -44,6 +44,7 @@ type SalesItem = {
 
 export default function ScanPage() {
   const [scanning, setScanning] = useState(true);
+  const [showScanner, setShowScanner] = useState(true); // 控制扫码工具显示，默认启动
   const [isLoading, setIsLoading] = useState(false);
   const [lastCode, setLastCode] = useState<string>('');
   const [product, setProduct] = useState<Product | null>(null);
@@ -177,7 +178,24 @@ export default function ScanPage() {
     setSalesHistory([]);
     lastFetchedCodeRef.current = '';
     setScanning(true);
-  }, []);
+    // 重新扫码时，如果扫码工具已隐藏，则显示它
+    if (!showScanner) {
+      setShowScanner(true);
+    }
+  }, [showScanner]);
+
+  const toggleScanner = useCallback(() => {
+    setShowScanner(prev => !prev);
+    // 如果隐藏扫码工具，也暂停扫描状态
+    if (showScanner) {
+      setScanning(false);
+    } else {
+      // 显示扫码工具时，延迟一点再启动扫描，避免卡顿
+      setTimeout(() => {
+        setScanning(true);
+      }, 300);
+    }
+  }, [showScanner]);
 
   const handleSalesPeriodChange = useCallback((period: '30' | '90' | '365' | 'all') => {
     setSalesPeriod(period);
@@ -592,39 +610,107 @@ export default function ScanPage() {
 
       {/* 摄像头区域 */}
       <div style={{ padding: '16px' }}>
-        <div
-          className={`camera-container ${!scanning ? 'paused' : ''}`}
-          style={{
-            position: 'relative',
-            overflow: 'hidden',
-            borderRadius: '16px',
-            background: '#000',
-            height: scanning ? '56vh' : '14vh',
-            transition: 'height 0.3s ease-in-out',
-            boxShadow: scanning ? '0 8px 24px rgba(0, 0, 0, 0.15)' : '0 2px 8px rgba(0, 0, 0, 0.1)',
-            border: scanning ? '2px solid #059669' : '2px solid #e5e7eb',
-          }}
-        >
-          {scanning ? (
-            <Scanner onDetected={handleDetected} />
-          ) : (
-            <div
+        {!showScanner ? (
+          <div
+            style={{
+              position: 'relative',
+              overflow: 'hidden',
+              borderRadius: '16px',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              height: '120px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
+              border: '2px solid #667eea',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+            }}
+            onClick={toggleScanner}
+          >
+            <div style={{ fontSize: '32px', marginBottom: 8 }}>📷</div>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>
+              点击启动扫码工具
+            </div>
+            <div style={{ fontSize: 12, opacity: 0.9, textAlign: 'center' }}>
+              隐藏状态可提升页面性能<br/>
+              <span style={{ fontSize: 11, opacity: 0.8, marginTop: 4, display: 'block' }}>
+                您仍可通过底部输入框手动输入条码查询
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div
+            className={`camera-container ${!scanning ? 'paused' : ''}`}
+            style={{
+              position: 'relative',
+              overflow: 'hidden',
+              borderRadius: '16px',
+              background: '#000',
+              height: scanning ? '56vh' : '14vh',
+              transition: 'height 0.3s ease-in-out',
+              boxShadow: scanning ? '0 8px 24px rgba(0, 0, 0, 0.15)' : '0 2px 8px rgba(0, 0, 0, 0.1)',
+              border: scanning ? '2px solid #059669' : '2px solid #e5e7eb',
+            }}
+          >
+            {scanning ? (
+              <Scanner onDetected={handleDetected} />
+            ) : (
+              <div
+                style={{
+                  color: '#9ca3af',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 14,
+                  gap: '8px',
+                }}
+              >
+                <div style={{ fontSize: '24px' }}>📷</div>
+                <div>摄像头已暂停</div>
+              </div>
+            )}
+            {/* 隐藏扫码工具按钮 */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleScanner();
+              }}
               style={{
-                color: '#9ca3af',
-                height: '100%',
+                position: 'absolute',
+                top: 12,
+                right: 12,
+                padding: '8px 12px',
+                borderRadius: 8,
+                border: 'none',
+                background: 'rgba(0, 0, 0, 0.7)',
+                color: '#fff',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                zIndex: 100,
                 display: 'flex',
-                flexDirection: 'column',
                 alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 14,
-                gap: '8px',
+                gap: 6,
+                backdropFilter: 'blur(10px)',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(0, 0, 0, 0.9)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(0, 0, 0, 0.7)';
               }}
             >
-              <div style={{ fontSize: '24px' }}>📷</div>
-              <div>摄像头已暂停</div>
-            </div>
-          )}
-        </div>
+              <span>👁️</span>
+              <span>隐藏</span>
+            </button>
+          </div>
+        )}
 
         {/* 最近条码 */}
         {lastCode ? (

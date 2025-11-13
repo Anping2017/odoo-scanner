@@ -281,153 +281,252 @@ export default function ReceivingPage() {
   }, []);
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f9fafb' }}>
-      {/* 顶部导航栏 */}
-      <div style={{
-        background: '#fff',
-        borderBottom: '1px solid #e5e7eb',
-        padding: '12px 16px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        position: 'sticky',
-        top: 0,
-        zIndex: 10
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ fontSize: 18, fontWeight: 600, color: '#111827' }}>
-            收货入库
+    <>
+      <style>{`
+        @media (max-width: 768px) {
+          .debug-buttons {
+            display: none !important;
+          }
+          .top-nav-left {
+            flex-wrap: wrap;
+            gap: 8px !important;
+          }
+          .top-nav-title {
+            font-size: 16px !important;
+          }
+          .top-nav-right {
+            flex-wrap: wrap;
+            gap: 6px !important;
+          }
+          .top-nav-button {
+            padding: 6px 12px !important;
+            font-size: 12px !important;
+          }
+          .order-card {
+            padding: 12px !important;
+          }
+          .order-header {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 12px !important;
+          }
+          .order-header-right {
+            width: 100% !important;
+            flex-direction: row !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+          }
+          .order-amount {
+            text-align: left !important;
+          }
+          .order-detail-button {
+            width: auto !important;
+            flex: 1 !important;
+            max-width: 200px !important;
+          }
+          .product-item {
+            flex-direction: column !important;
+            gap: 8px !important;
+          }
+          .product-info {
+            width: 100% !important;
+          }
+          .product-quantity {
+            width: 100% !important;
+            text-align: left !important;
+            display: flex !important;
+            flex-wrap: wrap !important;
+            gap: 8px !important;
+          }
+          .product-quantity > div {
+            flex: 1 1 calc(33.333% - 6px) !important;
+            min-width: 80px !important;
+          }
+        }
+        @media (max-width: 480px) {
+          .top-nav-title {
+            font-size: 15px !important;
+          }
+          .top-nav-button {
+            padding: 6px 10px !important;
+            font-size: 11px !important;
+          }
+          .order-card {
+            padding: 10px !important;
+          }
+          .order-name {
+            font-size: 15px !important;
+          }
+          .order-supplier {
+            font-size: 12px !important;
+          }
+          .product-name {
+            font-size: 13px !important;
+          }
+          .product-code {
+            font-size: 11px !important;
+          }
+        }
+        @media (hover: none) and (pointer: coarse) {
+          button {
+            min-height: 44px;
+          }
+        }
+      `}</style>
+      <div style={{ minHeight: '100vh', background: '#f9fafb' }}>
+        {/* 顶部导航栏 */}
+        <div style={{
+          background: '#fff',
+          borderBottom: '1px solid #e5e7eb',
+          padding: '12px 16px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+          flexWrap: 'wrap',
+          gap: 8,
+        }}>
+          <div className="top-nav-left" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div className="top-nav-title" style={{ fontSize: 18, fontWeight: 600, color: '#111827' }}>
+              收货入库
+            </div>
+            <div className="debug-buttons" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <button
+                onClick={debugReceiving}
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: 4,
+                  border: '1px solid #d1d5db',
+                  background: '#f9fafb',
+                  color: '#374151',
+                  fontSize: 10,
+                  cursor: 'pointer',
+                }}
+              >
+                调试
+              </button>
+              <button
+                onClick={testProductTracking}
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: 4,
+                  border: '1px solid #d1d5db',
+                  background: '#f9fafb',
+                  color: '#374151',
+                  fontSize: 10,
+                  cursor: 'pointer',
+                }}
+              >
+                跟踪测试
+              </button>
+              <button
+                onClick={checkMoveLineFields}
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: 4,
+                  border: '1px solid #d1d5db',
+                  background: '#f9fafb',
+                  color: '#374151',
+                  fontSize: 10,
+                  cursor: 'pointer',
+                }}
+              >
+                字段检查
+              </button>
+              <button
+                onClick={testMoveLineQuantity}
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: 4,
+                  border: '1px solid #d1d5db',
+                  background: '#f9fafb',
+                  color: '#374151',
+                  fontSize: 10,
+                  cursor: 'pointer',
+                }}
+              >
+                数量测试
+              </button>
+              <button
+                onClick={testMoveLineCreate}
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: 4,
+                  border: '1px solid #d1d5db',
+                  background: '#f9fafb',
+                  color: '#374151',
+                  fontSize: 10,
+                  cursor: 'pointer',
+                }}
+              >
+                创建测试
+              </button>
+              <button
+                onClick={testMoveLineSimple}
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: 4,
+                  border: '1px solid #d1d5db',
+                  background: '#f9fafb',
+                  color: '#374151',
+                  fontSize: 10,
+                  cursor: 'pointer',
+                }}
+              >
+                简单测试
+              </button>
+            </div>
           </div>
-          <button
-            onClick={debugReceiving}
-            style={{
-              padding: '4px 8px',
-              borderRadius: 4,
-              border: '1px solid #d1d5db',
-              background: '#f9fafb',
-              color: '#374151',
-              fontSize: 10,
-              cursor: 'pointer',
-            }}
-          >
-            调试
-          </button>
-          <button
-            onClick={testProductTracking}
-            style={{
-              padding: '4px 8px',
-              borderRadius: 4,
-              border: '1px solid #d1d5db',
-              background: '#f9fafb',
-              color: '#374151',
-              fontSize: 10,
-              cursor: 'pointer',
-            }}
-          >
-            跟踪测试
-          </button>
-          <button
-            onClick={checkMoveLineFields}
-            style={{
-              padding: '4px 8px',
-              borderRadius: 4,
-              border: '1px solid #d1d5db',
-              background: '#f9fafb',
-              color: '#374151',
-              fontSize: 10,
-              cursor: 'pointer',
-            }}
-          >
-            字段检查
-          </button>
-          <button
-            onClick={testMoveLineQuantity}
-            style={{
-              padding: '4px 8px',
-              borderRadius: 4,
-              border: '1px solid #d1d5db',
-              background: '#f9fafb',
-              color: '#374151',
-              fontSize: 10,
-              cursor: 'pointer',
-            }}
-          >
-            数量测试
-          </button>
-          <button
-            onClick={testMoveLineCreate}
-            style={{
-              padding: '4px 8px',
-              borderRadius: 4,
-              border: '1px solid #d1d5db',
-              background: '#f9fafb',
-              color: '#374151',
-              fontSize: 10,
-              cursor: 'pointer',
-            }}
-          >
-            创建测试
-          </button>
-          <button
-            onClick={testMoveLineSimple}
-            style={{
-              padding: '4px 8px',
-              borderRadius: 4,
-              border: '1px solid #d1d5db',
-              background: '#f9fafb',
-              color: '#374151',
-              fontSize: 10,
-              cursor: 'pointer',
-            }}
-          >
-            简单测试
-          </button>
+          <div className="top-nav-right" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              className="top-nav-button"
+              onClick={() => window.location.href = '/scan'}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 8,
+                border: '1px solid #d1d5db',
+                background: '#fff',
+                color: '#374151',
+                fontSize: 14,
+                cursor: 'pointer',
+              }}
+            >
+              扫码盘点
+            </button>
+            <button
+              className="top-nav-button"
+              onClick={() => window.location.href = '/parts-inventory'}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 8,
+                border: '1px solid #d1d5db',
+                background: '#fff',
+                color: '#374151',
+                fontSize: 14,
+                cursor: 'pointer',
+              }}
+            >
+              库存盘点
+            </button>
+            <button
+              className="top-nav-button"
+              onClick={handleLogout}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 8,
+                border: '1px solid #d1d5db',
+                background: '#fff',
+                color: '#374151',
+                fontSize: 14,
+                cursor: 'pointer',
+              }}
+            >
+              退出
+            </button>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => window.location.href = '/scan'}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 8,
-              border: '1px solid #d1d5db',
-              background: '#fff',
-              color: '#374151',
-              fontSize: 14,
-              cursor: 'pointer',
-            }}
-          >
-            扫码盘点
-          </button>
-          <button
-            onClick={() => window.location.href = '/parts-inventory'}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 8,
-              border: '1px solid #d1d5db',
-              background: '#fff',
-              color: '#374151',
-              fontSize: 14,
-              cursor: 'pointer',
-            }}
-          >
-            库存盘点
-          </button>
-          <button
-            onClick={handleLogout}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 8,
-              border: '1px solid #d1d5db',
-              background: '#fff',
-              color: '#374151',
-              fontSize: 14,
-              cursor: 'pointer',
-            }}
-          >
-            退出
-          </button>
-        </div>
-      </div>
 
       {/* 主内容 */}
       <div style={{ padding: '16px' }}>
@@ -444,31 +543,37 @@ export default function ReceivingPage() {
             {orders.map((order) => (
               <div
                 key={order.id}
+                className="order-card"
                 style={{
                   background: '#fff',
                   border: '1px solid #e5e7eb',
                   borderRadius: 12,
                   padding: 16,
+                  maxWidth: '100%',
+                  boxSizing: 'border-box',
+                  wordWrap: 'break-word',
+                  overflowWrap: 'break-word',
                 }}
               >
                 {/* 订单头部 */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <div>
-                    <div style={{ fontSize: 16, fontWeight: 600, color: '#111827' }}>
+                <div className="order-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="order-name" style={{ fontSize: 16, fontWeight: 600, color: '#111827', wordBreak: 'break-word' }}>
                       {order.name}
                     </div>
-                    <div style={{ fontSize: 14, color: '#6b7280', marginTop: 4 }}>
+                    <div className="order-supplier" style={{ fontSize: 14, color: '#6b7280', marginTop: 4, wordBreak: 'break-word' }}>
                       {order.supplier} • {new Date(order.date_order).toLocaleDateString()}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ textAlign: 'right' }}>
+                  <div className="order-header-right" style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                    <div className="order-amount" style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: 14, color: '#6b7280' }}>总金额</div>
                       <div style={{ fontSize: 16, fontWeight: 600, color: '#059669' }}>
                         ${order.amount_total.toFixed(2)}
                       </div>
                     </div>
                     <button
+                      className="order-detail-button"
                       onClick={() => window.location.href = `/receiving/${order.id}`}
                       style={{
                         padding: '8px 16px',
@@ -479,6 +584,7 @@ export default function ReceivingPage() {
                         fontSize: 14,
                         fontWeight: 600,
                         cursor: 'pointer',
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       查看详情
@@ -495,24 +601,28 @@ export default function ReceivingPage() {
                     {order.products.map((product) => (
                       <div
                         key={product.id}
+                        className="product-item"
                         style={{
                           padding: '12px',
                           background: '#f9fafb',
                           borderRadius: 8,
                           border: '1px solid #e5e7eb',
+                          maxWidth: '100%',
+                          boxSizing: 'border-box',
                         }}
                       >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', width: '100%', gap: 12 }}>
+                          <div className="product-info" style={{ flex: 1, minWidth: 0 }}>
+                            <div className="product-name" style={{ fontSize: 14, fontWeight: 600, color: '#111827', wordBreak: 'break-word' }}>
                               {product.product_name}
                             </div>
-                            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+                            <div className="product-code" style={{ fontSize: 12, color: '#6b7280', marginTop: 2, wordBreak: 'break-word' }}>
                               {product.product_code && `编码: ${product.product_code}`}
-                              {product.product_barcode && ` • 条码: ${product.product_barcode}`}
+                              {product.product_code && product.product_barcode && ` • `}
+                              {product.product_barcode && `条码: ${product.product_barcode}`}
                             </div>
                           </div>
-                          <div style={{ textAlign: 'right', minWidth: 120 }}>
+                          <div className="product-quantity" style={{ textAlign: 'right', minWidth: 120, flexShrink: 0 }}>
                             <div style={{ fontSize: 12, color: '#6b7280' }}>
                               待入库: <span style={{ fontWeight: 600, color: '#dc2626' }}>{product.qty_to_receive}</span>
                             </div>
@@ -556,6 +666,7 @@ export default function ReceivingPage() {
           {toast.message}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

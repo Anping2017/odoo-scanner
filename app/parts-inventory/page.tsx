@@ -45,6 +45,7 @@ export default function PartsInventoryPage() {
   const [isInventoryMode, setIsInventoryMode] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [showScanner, setShowScanner] = useState(true); // 控制扫码工具显示，默认启动
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -1621,18 +1622,108 @@ export default function PartsInventoryPage() {
       {/* 摄像头区域 - 只在盘点模式下显示 */}
       {isInventoryMode && (
         <div style={{ padding: '0 16px 16px' }}>
-          <div style={{
-            border: '2px solid #059669',
-            borderRadius: 12,
-            overflow: 'hidden',
-            background: '#000',
-            height: scanning ? '250px' : '60px',
-            transition: 'height 0.3s ease',
-          }}>
-          <Scanner key={scannerKey} onDetected={handleDetected} />
-          </div>
+          {!showScanner ? (
+            <div
+              style={{
+                position: 'relative',
+                overflow: 'hidden',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+                height: '120px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#fff',
+                boxShadow: '0 4px 12px rgba(5, 150, 105, 0.3)',
+                border: '2px solid #059669',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+              }}
+              onClick={() => {
+                setShowScanner(true);
+                setTimeout(() => {
+                  setScanning(true);
+                }, 300);
+              }}
+            >
+              <div style={{ fontSize: '32px', marginBottom: 8 }}>📷</div>
+              <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>
+                点击启动扫码工具
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.9, textAlign: 'center' }}>
+                隐藏状态可提升页面性能<br/>
+                <span style={{ fontSize: 11, opacity: 0.8, marginTop: 4, display: 'block' }}>
+                  您仍可通过手动选择零配件进行盘点
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div style={{
+              border: '2px solid #059669',
+              borderRadius: 12,
+              overflow: 'hidden',
+              background: '#000',
+              height: scanning ? '250px' : '60px',
+              transition: 'height 0.3s ease',
+              position: 'relative',
+            }}>
+              {scanning ? (
+                <Scanner key={scannerKey} onDetected={handleDetected} />
+              ) : (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '100%',
+                    color: '#fff',
+                    fontSize: 16,
+                  }}
+                >
+                  摄像头已暂停
+                </div>
+              )}
+              {/* 隐藏扫码工具按钮 */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowScanner(false);
+                  setScanning(false);
+                }}
+                style={{
+                  position: 'absolute',
+                  top: 12,
+                  right: 12,
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: 'rgba(0, 0, 0, 0.7)',
+                  color: '#fff',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  zIndex: 100,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  backdropFilter: 'blur(10px)',
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(0, 0, 0, 0.9)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(0, 0, 0, 0.7)';
+                }}
+              >
+                <span>👁️</span>
+                <span>隐藏</span>
+              </button>
+            </div>
+          )}
           
-          {scanCompleted && (
+          {scanCompleted && showScanner && (
             <div style={{
               marginTop: 12,
               textAlign: 'center',
