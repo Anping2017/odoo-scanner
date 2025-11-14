@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const productId = searchParams.get('product_id');
     const page = parseInt(searchParams.get('page') || '1');
-    const pageSize = parseInt(searchParams.get('page_size') || '10');
+    const pageSize = Math.min(parseInt(searchParams.get('page_size') || '10'), 500); // 限制最大pageSize为500
 
     if (!productId) {
       return NextResponse.json({ error: '缺少产品ID' }, { status: 400 });

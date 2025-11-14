@@ -90,11 +90,12 @@ async function getDefaultLocationForCompany(base: string, cookieStr: string, com
   return locIds?.result?.[0];
 }
 
-// —— GET: 最近库存变动（简版历史）——
+// —— GET: 库存变动记录（带分页）——
 export async function GET(req: NextRequest) {
   try {
     const pid = Number(req.nextUrl.searchParams.get('product_id') || 0);
-    const limit = Number(req.nextUrl.searchParams.get('limit') || 10);
+    const page = parseInt(req.nextUrl.searchParams.get('page') || '1');
+    const pageSize = parseInt(req.nextUrl.searchParams.get('page_size') || '10');
 
     const ck = cookies();
     const host = headers().get('host') || undefined;
@@ -110,22 +111,42 @@ export async function GET(req: NextRequest) {
     const context: any = {};
     if (companyId) { context.company_id = companyId; context.allowed_company_ids = [companyId]; }
 
-    // 用 stock.move 读近几条完成的移动作为历史（优化查询）
+    // 获取总记录数
+    let totalCount = 0;
+    try {
+      const countData = await rpc(base, '/web/dataset/call_kw', {
+        model: 'stock.move',
+        method: 'search_count',
+        args: [[
+          ['product_id', '=', pid],
+          ['state', '=', 'done'],
+        ]],
+        kwargs: { context },
+      }, cookieStr);
+      totalCount = countData?.result || 0;
+    } catch (e) {
+      console.log('获取总数失败:', e);
+    }
+
+    // 用 stock.move 读取完成的移动作为历史（带分页）
+    const offset = (page - 1) * pageSize;
     const moveIds = await rpc(base, '/web/dataset/call_kw', {
       model: 'stock.move',
-      method: 'search_read', // 使用 search_read 减少一次 API 调用
+      method: 'search_read',
       args: [[
         ['product_id', '=', pid],
         ['state', '=', 'done'],
       ], ['id', 'date', 'product_uom_qty', 'product_uom', 'location_id', 'location_dest_id', 'reference', 'create_uid', 'write_uid']],
-      kwargs: { limit, order: 'date desc', context },
+      kwargs: { 
+        limit: pageSize, 
+        offset: offset,
+        order: 'date desc', 
+        context 
+      },
     }, cookieStr);
 
-    if (!Array.isArray(moveIds?.result) || !moveIds.result.length) {
-      return NextResponse.json({ history: [] });
-    }
-
-    const out = (moveIds.result || []).map((m: any) => ({
+    const moves = moveIds?.result || [];
+    const out = moves.map((m: any) => ({
       id: m.id,
       date: m.date,
       qty_done: m.product_uom_qty,
@@ -137,7 +158,13 @@ export async function GET(req: NextRequest) {
       updated_by: m.write_uid?.[1],
     }));
 
-    return NextResponse.json({ history: out });
+    return NextResponse.json({ 
+      history: out,
+      total: totalCount,
+      page: page,
+      pageSize: pageSize,
+      totalPages: Math.ceil(totalCount / pageSize)
+    });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || '查询历史失败' }, { status: 500 });
   }

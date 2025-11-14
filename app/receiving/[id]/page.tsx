@@ -305,67 +305,67 @@ export default function ReceivingDetailPage({ params }: { params: { id: string }
         }
       `}</style>
       <div style={{ padding: 16, maxWidth: 800, margin: 'auto', width: '100%', boxSizing: 'border-box' }}>
-        {/* 头部 */}
+      {/* 头部 */}
         <div className="detail-header" style={{
-          background: '#fff',
-          border: '1px solid #e5e7eb',
-          borderRadius: 12,
-          padding: 16,
-          marginBottom: 16,
-          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          position: 'sticky',
-          top: 0,
+        background: '#fff',
+        border: '1px solid #e5e7eb',
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 16,
+        boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        position: 'sticky',
+        top: 0,
           zIndex: 10,
           maxWidth: '100%',
           boxSizing: 'border-box',
-        }}>
+      }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="detail-title" style={{ fontSize: 18, fontWeight: 600, color: '#111827', wordBreak: 'break-word' }}>
-              收货订单详情
-            </div>
-            <div className="detail-subtitle" style={{ fontSize: 14, color: '#6b7280', marginTop: 4, wordBreak: 'break-word' }}>
-              {order.name} • {order.warehouse}
-            </div>
+            收货订单详情
           </div>
-          <div className="detail-header-buttons" style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            <button
-              onClick={confirmAllProducts}
-              disabled={confirming || !order || order.products.length === 0}
-              style={{
-                padding: '8px 16px',
-                borderRadius: 8,
-                border: 'none',
-                background: confirming || !order || order.products.length === 0 ? '#9ca3af' : '#059669',
-                color: '#fff',
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: confirming || !order || order.products.length === 0 ? 'not-allowed' : 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {confirming ? '入库中...' : '一键入库'}
-            </button>
-            <button
-              onClick={() => router.push('/receiving')}
-              style={{
-                padding: '8px 16px',
-                borderRadius: 8,
-                border: '1px solid #e5e7eb',
-                background: '#fff',
-                color: '#374151',
-                fontSize: 14,
-                fontWeight: 500,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              返回列表
-            </button>
+            <div className="detail-subtitle" style={{ fontSize: 14, color: '#6b7280', marginTop: 4, wordBreak: 'break-word' }}>
+            {order.name} • {order.warehouse}
           </div>
         </div>
+          <div className="detail-header-buttons" style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <button
+            onClick={confirmAllProducts}
+            disabled={confirming || !order || order.products.length === 0}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 8,
+              border: 'none',
+              background: confirming || !order || order.products.length === 0 ? '#9ca3af' : '#059669',
+              color: '#fff',
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: confirming || !order || order.products.length === 0 ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap',
+            }}
+          >
+            {confirming ? '入库中...' : '一键入库'}
+          </button>
+          <button
+            onClick={() => router.push('/receiving')}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 8,
+              border: '1px solid #e5e7eb',
+              background: '#fff',
+              color: '#374151',
+              fontSize: 14,
+              fontWeight: 500,
+              cursor: 'pointer',
+                whiteSpace: 'nowrap',
+            }}
+          >
+            返回列表
+          </button>
+        </div>
+      </div>
 
       {/* 订单信息 */}
       <div style={{
@@ -600,7 +600,7 @@ export default function ReceivingDetailPage({ params }: { params: { id: string }
           {toast.message}
         </div>
       )}
-      </div>
+    </div>
     </>
   );
 }

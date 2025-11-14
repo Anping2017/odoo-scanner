@@ -1311,20 +1311,37 @@ export default function PartsInventoryPage() {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ fontWeight: 700, fontSize: 16 }}>库存盘点</div>
-            <button
-              onClick={handleBack}
-              style={{
-                padding: '8px 12px',
-                borderRadius: 8,
-                border: '1px solid #e5e7eb',
-                background: '#fff',
-                color: '#374151',
-                fontWeight: 500,
-                fontSize: 14,
-              }}
-            >
-              返回
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => window.location.href = '/products'}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  border: '1px solid #e5e7eb',
+                  background: '#fff',
+                  color: '#374151',
+                  fontWeight: 500,
+                  fontSize: 14,
+                  cursor: 'pointer',
+                }}
+              >
+                🔍 产品查询
+              </button>
+              <button
+                onClick={handleBack}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: 8,
+                  border: '1px solid #e5e7eb',
+                  background: '#fff',
+                  color: '#374151',
+                  fontWeight: 500,
+                  fontSize: 14,
+                }}
+              >
+                返回
+              </button>
+            </div>
           </div>
         </div>
 

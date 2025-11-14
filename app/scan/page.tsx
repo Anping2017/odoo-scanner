@@ -64,9 +64,15 @@ export default function ScanPage() {
   const [codeInput, setCodeInput] = useState('');
   const [counted, setCounted] = useState<string>(''); // 盘点数量
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyPageSize] = useState(10);
   const [salesHistory, setSalesHistory] = useState<SalesItem[]>([]);
-  const [salesPeriod, setSalesPeriod] = useState<'30' | '90' | '365' | 'all'>('30');
   const [salesLoading, setSalesLoading] = useState(false);
+  const [salesPage, setSalesPage] = useState(1);
+  const [salesTotal, setSalesTotal] = useState(0);
+  const [salesPageSize] = useState(10);
   const [purchaseHistory, setPurchaseHistory] = useState<PurchaseItem[]>([]);
   const [purchaseLoading, setPurchaseLoading] = useState(false);
   const [purchasePage, setPurchasePage] = useState(1);
@@ -90,28 +96,35 @@ export default function ScanPage() {
     setTimeout(() => setToast(null), 3000);
   }, []);
 
-  const loadHistory = useCallback(async (pid: number) => {
+  const loadHistory = useCallback(async (pid: number, page: number = 1) => {
+    setHistoryLoading(true);
     try {
-      const res = await fetch(`/api/inventory?product_id=${pid}&limit=5`, { cache: 'no-store' });
+      const res = await fetch(`/api/inventory?product_id=${pid}&page=${page}&page_size=${historyPageSize}`, { cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
       setHistory(Array.isArray(data?.history) ? data.history : []);
+      setHistoryTotal(data?.total || 0);
     } catch {
       setHistory([]);
+      setHistoryTotal(0);
+    } finally {
+      setHistoryLoading(false);
     }
-  }, []);
+  }, [historyPageSize]);
 
-  const loadSalesHistory = useCallback(async (pid: number, period: string = '30') => {
+  const loadSalesHistory = useCallback(async (pid: number, page: number = 1) => {
     setSalesLoading(true);
     try {
-      const res = await fetch(`/api/sales-history?product_id=${pid}&period=${period}`, { cache: 'no-store' });
+      const res = await fetch(`/api/sales-history?product_id=${pid}&page=${page}&page_size=${salesPageSize}`, { cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
       setSalesHistory(Array.isArray(data?.salesHistory) ? data.salesHistory : []);
+      setSalesTotal(data?.total || 0);
     } catch {
       setSalesHistory([]);
+      setSalesTotal(0);
     } finally {
       setSalesLoading(false);
     }
-  }, []);
+  }, [salesPageSize]);
 
   const loadPurchaseHistory = useCallback(async (pid: number, page: number = 1) => {
     setPurchaseLoading(true);
@@ -183,8 +196,8 @@ export default function ScanPage() {
         typeof p?.qty_available === 'number' ? String(p.qty_available) : ''
       );
       if (p?.id) {
-        loadHistory(p.id);
-        loadSalesHistory(p.id, salesPeriod);
+        loadHistory(p.id, historyPage);
+        loadSalesHistory(p.id, salesPage);
       }
     } catch (error: any) {
       if (error.name !== 'AbortError') {
@@ -194,7 +207,7 @@ export default function ScanPage() {
       setIsLoading(false);
       fetchLockRef.current = false;
     }
-  }, [loadHistory, loadSalesHistory, salesPeriod, showToast]);
+  }, [loadHistory, loadSalesHistory, salesPage, showToast]);
 
   const handleDetected = useCallback((code: string) => {
     if (!code) return;
@@ -231,12 +244,33 @@ export default function ScanPage() {
     }
   }, [showScanner]);
 
-  const handleSalesPeriodChange = useCallback((period: '30' | '90' | '365' | 'all') => {
-    setSalesPeriod(period);
+  const handleSalesPageChange = useCallback((page: number) => {
+    setSalesPage(page);
     if (product?.id) {
-      loadSalesHistory(product.id, period);
+      loadSalesHistory(product.id, page);
     }
   }, [product?.id, loadSalesHistory]);
+
+  // 当切换到销售标签页时，加载数据
+  useEffect(() => {
+    if (activeTab === 'sales' && product?.id) {
+      loadSalesHistory(product.id, salesPage);
+    }
+  }, [activeTab, product?.id, salesPage, loadSalesHistory]);
+
+  const handleHistoryPageChange = useCallback((page: number) => {
+    setHistoryPage(page);
+    if (product?.id) {
+      loadHistory(product.id, page);
+    }
+  }, [product?.id, loadHistory]);
+
+  // 当切换到库存变动标签页时，加载数据
+  useEffect(() => {
+    if (activeTab === 'history' && product?.id) {
+      loadHistory(product.id, historyPage);
+    }
+  }, [activeTab, product?.id, historyPage, loadHistory]);
 
   const handlePurchasePageChange = useCallback((page: number) => {
     setPurchasePage(page);
@@ -341,7 +375,7 @@ export default function ScanPage() {
       
       // 异步重新加载历史记录（不阻塞UI）
       if (product.id) {
-        loadHistory(product.id).catch(e => {
+        loadHistory(product.id, historyPage).catch(e => {
           // 刷新历史记录失败
         });
       }
@@ -648,6 +682,31 @@ export default function ScanPage() {
             </button>
             <button
               className="top-bar-button"
+              onClick={() => window.location.href = '/products'}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 10,
+                border: '1px solid #e5e7eb',
+                background: '#fff',
+                color: '#374151',
+                fontWeight: 500,
+                fontSize: 13,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#667eea';
+                e.currentTarget.style.color = '#667eea';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#e5e7eb';
+                e.currentTarget.style.color = '#374151';
+              }}
+            >
+              🔍 产品查询
+            </button>
+            <button
+              className="top-bar-button"
               onClick={handleLogout}
               style={{
                 padding: '8px 12px',
@@ -863,7 +922,7 @@ export default function ScanPage() {
               <div className="product-name" style={{ 
                 fontWeight: 700, 
                 fontSize: '18px', 
-                marginBottom: 8, 
+                marginBottom: 0, 
                 color: '#111827', 
                 wordBreak: 'break-word',
                 overflowWrap: 'break-word',
@@ -873,76 +932,6 @@ export default function ScanPage() {
                 boxSizing: 'border-box',
               }}>
                 {product.name}
-              </div>
-              <div className="product-info-row" style={{ 
-                color: '#6b7280', 
-                fontSize: 13, 
-                marginBottom: 12, 
-                display: 'flex', 
-                flexWrap: 'wrap', 
-                gap: '8px',
-                maxWidth: '100%',
-                minWidth: 0,
-                width: '100%',
-                boxSizing: 'border-box',
-                wordBreak: 'break-word',
-                overflowWrap: 'break-word',
-              }}>
-                <span style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>条码：<span style={{ color: '#374151' }}>{product.barcode || '-'}</span></span>
-                <span style={{ display: 'none' }}>|</span>
-                <span style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>编码：<span style={{ color: '#374151' }}>{product.default_code || '-'}</span></span>
-              </div>
-              <div className="inventory-info" style={{ 
-                marginTop: 12, 
-                padding: '12px', 
-                background: '#f0f9ff', 
-                borderRadius: '10px',
-                border: '1px solid #bae6fd',
-                maxWidth: '100%',
-                boxSizing: 'border-box',
-              }}>
-                <div style={{ fontSize: 14, marginBottom: 6, wordBreak: 'break-word' }}>
-                  <span style={{ color: '#6b7280' }}>现有库存：</span>
-                  <strong style={{ color: '#0369a1', fontSize: '18px' }}>{product.qty_available ?? '-'}</strong>
-                  {typeof product.free_qty === 'number' ? (
-                    <span style={{ marginLeft: 12, color: '#6b7280', fontSize: '13px' }}>
-                      可用：<span style={{ color: '#059669' }}>{product.free_qty}</span>
-                    </span>
-                  ) : null}
-                </div>
-                <div style={{ fontSize: 13, marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '12px', wordBreak: 'break-word' }}>
-                  <span style={{ color: '#6b7280' }}>
-                    门店零售价：<span style={{ color: '#059669', fontWeight: 600 }}>
-                      {typeof product.list_price === 'number' ? `$${product.list_price.toFixed(2)}` : '-'}
-                    </span>
-                  </span>
-                  {typeof product.standard_price === 'number' ? (
-                    <span style={{ color: '#6b7280' }}>
-                      成本：<span style={{ color: '#dc2626', fontWeight: 600 }}>${product.standard_price.toFixed(2)}</span>
-                    </span>
-                  ) : null}
-                </div>
-                {/* 只在自定义字段存在时显示 */}
-                {(product.raytech_p3 !== null && product.raytech_p3 !== undefined) || 
-                 (product.raytech_stock !== null && product.raytech_stock !== undefined) ? (
-                  <div style={{ marginTop: 8, fontSize: 13, display: 'flex', flexWrap: 'wrap', gap: '12px', wordBreak: 'break-word' }}>
-                    {typeof product.raytech_p3 === 'number' ? (
-                      <span style={{ color: '#6b7280' }}>
-                        总部零售价：<span style={{ color: '#059669', fontWeight: 600 }}>${product.raytech_p3.toFixed(2)}</span>
-                      </span>
-                    ) : null}
-                    {typeof product.raytech_stock === 'number' ? (
-                      <span style={{ color: '#6b7280' }}>
-                        总部库存：<span style={{ 
-                          color: product.raytech_stock > 0 ? '#059669' : '#dc2626', 
-                          fontWeight: 600 
-                        }}>
-                          {product.raytech_stock > 0 ? '有货' : '无货'}
-                        </span>
-                      </span>
-                    ) : null}
-                  </div>
-                ) : null}
               </div>
 
               {/* 标签页导航 */}
@@ -1008,8 +997,267 @@ export default function ScanPage() {
                   {/* 产品信息标签页 */}
                   {activeTab === 'info' && (
                     <div>
+                      {/* 产品图片 */}
+                      {product && product.image_128 && (
+                        <div
+                          style={{
+                            marginBottom: 20,
+                            textAlign: 'center',
+                          }}
+                        >
+                          <img
+                            src={`data:image/png;base64,${product.image_128}`}
+                            alt={product.name}
+                            loading="lazy"
+                            style={{
+                              maxWidth: '100%',
+                              maxHeight: '200px',
+                              borderRadius: 8,
+                              border: '1px solid #e5e7eb',
+                              objectFit: 'contain',
+                              backgroundColor: '#f9fafb',
+                              cursor: 'pointer',
+                            }}
+                            onClick={() => {
+                              setShowImageModal(true);
+                              if (!highResImage) {
+                                fetchHighResImage();
+                              }
+                            }}
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 8 }}>
+                            点击查看大图
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 产品基本信息 */}
+                      <div style={{ 
+                        marginBottom: 20, 
+                        padding: '16px', 
+                        background: '#f9fafb', 
+                        borderRadius: '12px',
+                        border: '1px solid #e5e7eb',
+                      }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 12 }}>
+                          产品信息
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 13 }}>
+                            <div style={{ flex: '1 1 auto', minWidth: '120px' }}>
+                              <span style={{ color: '#6b7280' }}>条码：</span>
+                              <span style={{ color: '#374151', fontWeight: 500 }}>{product.barcode || '-'}</span>
+                            </div>
+                            <div style={{ flex: '1 1 auto', minWidth: '120px' }}>
+                              <span style={{ color: '#6b7280' }}>编码：</span>
+                              <span style={{ color: '#374151', fontWeight: 500 }}>{product.default_code || '-'}</span>
+                            </div>
+                          </div>
+                          <div style={{ 
+                            padding: '12px', 
+                            background: '#f0f9ff', 
+                            borderRadius: '8px',
+                            border: '1px solid #bae6fd',
+                          }}>
+                            <div style={{ fontSize: 14, marginBottom: 6 }}>
+                              <span style={{ color: '#6b7280' }}>现有库存：</span>
+                              <strong style={{ color: '#0369a1', fontSize: '18px' }}>{product.qty_available ?? '-'}</strong>
+                              {typeof product.free_qty === 'number' ? (
+                                <span style={{ marginLeft: 12, color: '#6b7280', fontSize: '13px' }}>
+                                  可用：<span style={{ color: '#059669' }}>{product.free_qty}</span>
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 价格信息 */}
+                      <div style={{ 
+                        marginBottom: 20, 
+                        padding: '16px', 
+                        background: '#f9fafb', 
+                        borderRadius: '12px',
+                        border: '1px solid #e5e7eb',
+                      }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 12 }}>
+                          价格信息
+                        </div>
+                        <div style={{ fontSize: 13, display: 'flex', flexWrap: 'wrap', gap: '16px', wordBreak: 'break-word' }}>
+                          <span style={{ color: '#6b7280' }}>
+                            门店零售价：<span style={{ color: '#059669', fontWeight: 600 }}>
+                              {typeof product.list_price === 'number' ? `$${product.list_price.toFixed(2)}` : '-'}
+                            </span>
+                          </span>
+                          {typeof product.standard_price === 'number' ? (
+                            <span style={{ color: '#6b7280' }}>
+                              成本：<span style={{ color: '#dc2626', fontWeight: 600 }}>${product.standard_price.toFixed(2)}</span>
+                            </span>
+                          ) : null}
+                        </div>
+                        {/* 只在自定义字段存在时显示 */}
+                        {(product.raytech_p3 !== null && product.raytech_p3 !== undefined) || 
+                         (product.raytech_stock !== null && product.raytech_stock !== undefined) ? (
+                          <div style={{ marginTop: 12, fontSize: 13, display: 'flex', flexWrap: 'wrap', gap: '16px', wordBreak: 'break-word' }}>
+                            {typeof product.raytech_p3 === 'number' ? (
+                              <span style={{ color: '#6b7280' }}>
+                                总部零售价：<span style={{ color: '#059669', fontWeight: 600 }}>${product.raytech_p3.toFixed(2)}</span>
+                              </span>
+                            ) : null}
+                            {typeof product.raytech_stock === 'number' ? (
+                              <span style={{ color: '#6b7280' }}>
+                                总部库存：<span style={{ 
+                                  color: product.raytech_stock > 0 ? '#059669' : '#dc2626', 
+                                  fontWeight: 600 
+                                }}>
+                                  {product.raytech_stock > 0 ? '有货' : '无货'}
+                                </span>
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+
+                    </div>
+                  )}
+
+                  {/* 销售记录标签页 */}
+                  {activeTab === 'sales' && (
+                    <div>
+                      <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>
+                        所有销售历史记录
+                      </div>
+                      {salesLoading ? (
+                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#6b7280' }}>
+                          <div style={{ fontSize: 14 }}>加载中...</div>
+                        </div>
+                      ) : salesHistory.length > 0 ? (
+                        <>
+                          <div style={{ maxHeight: '400px', overflowY: 'auto', marginBottom: 16 }}>
+                            {salesHistory.map((sale) => (
+                              <div
+                                key={sale.id}
+                                style={{
+                                  padding: '12px',
+                                  borderBottom: '1px solid #f3f4f6',
+                                  fontSize: 13,
+                                  borderRadius: 8,
+                                  marginBottom: 8,
+                                  background: '#f9fafb',
+                                  transition: 'all 0.2s ease',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = '#f3f4f6';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = '#f9fafb';
+                                }}
+                              >
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, alignItems: 'center' }}>
+                                  <span style={{ fontWeight: 600, color: '#374151', fontSize: 14 }}>
+                                    {sale.order_name}
+                                    {sale.type && (
+                                      <span style={{ 
+                                        fontSize: 10, 
+                                        color: sale.type === 'POS' ? '#059669' : sale.type === 'INV' ? '#dc2626' : '#3b82f6',
+                                        marginLeft: 6,
+                                        padding: '2px 6px',
+                                        borderRadius: 4,
+                                        backgroundColor: sale.type === 'POS' ? '#d1fae5' : sale.type === 'INV' ? '#fee2e2' : '#dbeafe'
+                                      }}>
+                                        {sale.type === 'POS' ? 'POS' : sale.type === 'INV' ? '发票' : 'SO'}
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span style={{ color: '#059669', fontWeight: 700, fontSize: 15 }}>
+                                    ${sale.total_amount.toFixed(2)}
+                                  </span>
+                                </div>
+                                <div style={{ color: '#6b7280', marginBottom: 4, fontSize: 12 }}>
+                                  客户: {sale.customer}
+                                </div>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#6b7280', fontSize: 12 }}>
+                                  <span>{sale.date}</span>
+                                  <span>{sale.quantity} × ${sale.unit_price.toFixed(2)}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          
+                          {/* 分页控件 */}
+                          {Math.ceil(salesTotal / salesPageSize) > 1 && (
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              gap: 8,
+                              padding: '12px 0',
+                              borderTop: '1px solid #e5e7eb',
+                            }}>
+                              <button
+                                onClick={() => handleSalesPageChange(salesPage - 1)}
+                                disabled={salesPage <= 1}
+                                style={{
+                                  padding: '8px 12px',
+                                  borderRadius: 6,
+                                  border: '1px solid #d1d5db',
+                                  background: salesPage <= 1 ? '#f3f4f6' : '#fff',
+                                  color: salesPage <= 1 ? '#9ca3af' : '#374151',
+                                  fontSize: 12,
+                                  fontWeight: 500,
+                                  cursor: salesPage <= 1 ? 'not-allowed' : 'pointer',
+                                  transition: 'all 0.2s ease',
+                                }}
+                              >
+                                上一页
+                              </button>
+                              <div style={{
+                                fontSize: 12,
+                                color: '#6b7280',
+                                padding: '0 12px',
+                              }}>
+                                第 {salesPage} / {Math.ceil(salesTotal / salesPageSize)} 页
+                                <span style={{ marginLeft: 8, color: '#9ca3af' }}>
+                                  (共 {salesTotal} 条)
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => handleSalesPageChange(salesPage + 1)}
+                                disabled={salesPage >= Math.ceil(salesTotal / salesPageSize)}
+                                style={{
+                                  padding: '8px 12px',
+                                  borderRadius: 6,
+                                  border: '1px solid #d1d5db',
+                                  background: salesPage >= Math.ceil(salesTotal / salesPageSize) ? '#f3f4f6' : '#fff',
+                                  color: salesPage >= Math.ceil(salesTotal / salesPageSize) ? '#9ca3af' : '#374151',
+                                  fontSize: 12,
+                                  fontWeight: 500,
+                                  cursor: salesPage >= Math.ceil(salesTotal / salesPageSize) ? 'not-allowed' : 'pointer',
+                                  transition: 'all 0.2s ease',
+                                }}
+                              >
+                                下一页
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#6b7280' }}>
+                          <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.3 }}>💰</div>
+                          <div style={{ fontSize: 14 }}>暂无销售记录</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 库存变动记录标签页 */}
+                  {activeTab === 'history' && (
+                    <div>
                       {/* 盘点输入区 */}
-                      <div className="count-input-container" style={{ marginTop: 0, maxWidth: '100%', boxSizing: 'border-box' }}>
+                      <div className="count-input-container" style={{ marginTop: 0, marginBottom: 20, maxWidth: '100%', boxSizing: 'border-box' }}>
                         <div style={{ marginBottom: 12 }}>
                           <label style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>盘点数量（调整为）：</label>
                         </div>
@@ -1153,178 +1401,121 @@ export default function ScanPage() {
                           </button>
                         </div>
                       </div>
-                    </div>
-                  )}
 
-                  {/* 销售记录标签页 */}
-                  {activeTab === 'sales' && (
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <div style={{ fontSize: 13, color: '#6b7280' }}>选择时间范围查看销售记录</div>
-                        <button
-                          onClick={testPosSales}
-                          style={{
-                            padding: '4px 8px',
-                            borderRadius: 4,
-                            border: '1px solid #d1d5db',
-                            background: '#f9fafb',
-                            color: '#374151',
-                            fontSize: 10,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          调试POS
-                        </button>
-                      </div>
-                      
-                      {/* 页签按钮 */}
-                      <div className="sales-tabs" style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-                        {[
-                          { key: '30', label: '最近30天' },
-                          { key: '90', label: '最近90天' },
-                          { key: '365', label: '最近365天' },
-                          { key: 'all', label: '所有' }
-                        ].map(({ key, label }) => (
-                          <button
-                            key={key}
-                            onClick={() => handleSalesPeriodChange(key as any)}
-                            style={{
-                              padding: '6px 12px',
-                              borderRadius: 6,
-                              border: '1px solid #d1d5db',
-                              background: salesPeriod === key ? '#3b82f6' : '#fff',
-                              color: salesPeriod === key ? '#fff' : '#374151',
-                              fontSize: 12,
-                              fontWeight: salesPeriod === key ? 600 : 400,
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                              flex: '1 1 auto',
-                              minWidth: 'calc(25% - 6px)',
-                            }}
-                          >
-                            {label}
-                          </button>
-                        ))}
-                      </div>
-
-                      {/* 销售记录列表 */}
-                      {salesLoading ? (
-                        <div style={{ textAlign: 'center', padding: '20px 0', color: '#6b7280' }}>
-                          加载中...
-                        </div>
-                      ) : salesHistory.length > 0 ? (
-                        <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                          {salesHistory.map((sale) => (
-                            <div
-                              key={sale.id}
-                              style={{
-                                padding: '12px',
-                                borderBottom: '1px solid #f3f4f6',
-                                fontSize: 13,
-                                borderRadius: 8,
-                                marginBottom: 8,
-                                background: '#f9fafb',
-                                transition: 'all 0.2s ease',
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.background = '#f3f4f6';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.background = '#f9fafb';
-                              }}
-                            >
-                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, alignItems: 'center' }}>
-                                <span style={{ fontWeight: 600, color: '#374151', fontSize: 14 }}>
-                                  {sale.order_name}
-                                  {sale.type && (
-                                    <span style={{ 
-                                      fontSize: 10, 
-                                      color: sale.type === 'POS' ? '#059669' : sale.type === 'INV' ? '#dc2626' : '#3b82f6',
-                                      marginLeft: 6,
-                                      padding: '2px 6px',
-                                      borderRadius: 4,
-                                      backgroundColor: sale.type === 'POS' ? '#d1fae5' : sale.type === 'INV' ? '#fee2e2' : '#dbeafe'
-                                    }}>
-                                      {sale.type === 'POS' ? 'POS' : sale.type === 'INV' ? '发票' : 'SO'}
-                                    </span>
-                                  )}
-                                </span>
-                                <span style={{ color: '#059669', fontWeight: 700, fontSize: 15 }}>
-                                  ${sale.total_amount.toFixed(2)}
-                                </span>
-                              </div>
-                              <div style={{ color: '#6b7280', marginBottom: 4, fontSize: 12 }}>
-                                客户: {sale.customer}
-                              </div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#6b7280', fontSize: 12 }}>
-                                <span>{sale.date}</span>
-                                <span>{sale.quantity} × ${sale.unit_price.toFixed(2)}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#6b7280' }}>
-                          <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.3 }}>💰</div>
-                          <div style={{ fontSize: 14 }}>暂无销售记录</div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* 库存变动记录标签页 */}
-                  {activeTab === 'history' && (
-                    <div>
                       <div style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>
-                        最近5条库存变动记录
+                        所有库存变动记录
                       </div>
-                      {history.length ? (
-                        <div style={{ display: 'grid', gap: 10 }}>
-                          {history.map((h) => (
-                            <div
-                              key={h.id}
-                              className="history-item"
-                              style={{
-                                border: '1px solid #e5e7eb',
-                                borderRadius: 10,
-                                padding: 12,
-                                fontSize: 13,
-                                lineHeight: 1.6,
-                                wordBreak: 'break-word',
-                                maxWidth: '100%',
-                                boxSizing: 'border-box',
-                                background: '#f9fafb',
-                                transition: 'all 0.2s ease',
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.background = '#f3f4f6';
-                                e.currentTarget.style.borderColor = '#d1d5db';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.background = '#f9fafb';
-                                e.currentTarget.style.borderColor = '#e5e7eb';
-                              }}
-                            >
-                              <div style={{ marginBottom: 6 }}>
-                                <strong style={{ color: '#667eea', fontSize: 15 }}>{h.qty_done}</strong>
-                                <span style={{ color: '#6b7280', marginLeft: 4 }}>{h.uom || ''}</span>
-                              </div>
-                              <div style={{ color: '#6b7280', marginBottom: 4, wordBreak: 'break-word' }}>
-                                <span style={{ color: '#374151' }}>{h.from || '-'}</span>
-                                <span style={{ margin: '0 8px', color: '#9ca3af' }}>→</span>
-                                <span style={{ color: '#374151' }}>{h.to || '-'}</span>
-                              </div>
-                              <div style={{ color: '#6b7280', fontSize: 12, marginBottom: 4, wordBreak: 'break-word' }}>
-                                {new Date(h.date).toLocaleString('zh-CN')} | {h.created_by || h.updated_by || '系统'}
-                              </div>
-                              {h.ref && (
-                                <div style={{ color: '#667eea', fontSize: 12, wordBreak: 'break-word' }}>
-                                  📎 Ref: {h.ref}
-                                </div>
-                              )}
-                            </div>
-                          ))}
+                      {historyLoading ? (
+                        <div style={{ textAlign: 'center', padding: '40px 0', color: '#6b7280' }}>
+                          <div style={{ fontSize: 14 }}>加载中...</div>
                         </div>
+                      ) : history.length > 0 ? (
+                        <>
+                          <div style={{ maxHeight: '400px', overflowY: 'auto', marginBottom: 16 }}>
+                            {history.map((h) => (
+                              <div
+                                key={h.id}
+                                className="history-item"
+                                style={{
+                                  border: '1px solid #e5e7eb',
+                                  borderRadius: 10,
+                                  padding: 12,
+                                  fontSize: 13,
+                                  lineHeight: 1.6,
+                                  wordBreak: 'break-word',
+                                  maxWidth: '100%',
+                                  boxSizing: 'border-box',
+                                  background: '#f9fafb',
+                                  transition: 'all 0.2s ease',
+                                  marginBottom: 10,
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = '#f3f4f6';
+                                  e.currentTarget.style.borderColor = '#d1d5db';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = '#f9fafb';
+                                  e.currentTarget.style.borderColor = '#e5e7eb';
+                                }}
+                              >
+                                <div style={{ marginBottom: 6 }}>
+                                  <strong style={{ color: '#667eea', fontSize: 15 }}>{h.qty_done}</strong>
+                                  <span style={{ color: '#6b7280', marginLeft: 4 }}>{h.uom || ''}</span>
+                                </div>
+                                <div style={{ color: '#6b7280', marginBottom: 4, wordBreak: 'break-word' }}>
+                                  <span style={{ color: '#374151' }}>{h.from || '-'}</span>
+                                  <span style={{ margin: '0 8px', color: '#9ca3af' }}>→</span>
+                                  <span style={{ color: '#374151' }}>{h.to || '-'}</span>
+                                </div>
+                                <div style={{ color: '#6b7280', fontSize: 12, marginBottom: 4, wordBreak: 'break-word' }}>
+                                  {new Date(h.date).toLocaleString('zh-CN')} | {h.created_by || h.updated_by || '系统'}
+                                </div>
+                                {h.ref && (
+                                  <div style={{ color: '#667eea', fontSize: 12, wordBreak: 'break-word' }}>
+                                    📎 Ref: {h.ref}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          
+                          {/* 分页控件 */}
+                          {Math.ceil(historyTotal / historyPageSize) > 1 && (
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              gap: 8,
+                              padding: '12px 0',
+                              borderTop: '1px solid #e5e7eb',
+                            }}>
+                              <button
+                                onClick={() => handleHistoryPageChange(historyPage - 1)}
+                                disabled={historyPage <= 1}
+                                style={{
+                                  padding: '8px 12px',
+                                  borderRadius: 6,
+                                  border: '1px solid #d1d5db',
+                                  background: historyPage <= 1 ? '#f3f4f6' : '#fff',
+                                  color: historyPage <= 1 ? '#9ca3af' : '#374151',
+                                  fontSize: 12,
+                                  fontWeight: 500,
+                                  cursor: historyPage <= 1 ? 'not-allowed' : 'pointer',
+                                  transition: 'all 0.2s ease',
+                                }}
+                              >
+                                上一页
+                              </button>
+                              <div style={{
+                                fontSize: 12,
+                                color: '#6b7280',
+                                padding: '0 12px',
+                              }}>
+                                第 {historyPage} / {Math.ceil(historyTotal / historyPageSize)} 页
+                                <span style={{ marginLeft: 8, color: '#9ca3af' }}>
+                                  (共 {historyTotal} 条)
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => handleHistoryPageChange(historyPage + 1)}
+                                disabled={historyPage >= Math.ceil(historyTotal / historyPageSize)}
+                                style={{
+                                  padding: '8px 12px',
+                                  borderRadius: 6,
+                                  border: '1px solid #d1d5db',
+                                  background: historyPage >= Math.ceil(historyTotal / historyPageSize) ? '#f3f4f6' : '#fff',
+                                  color: historyPage >= Math.ceil(historyTotal / historyPageSize) ? '#9ca3af' : '#374151',
+                                  fontSize: 12,
+                                  fontWeight: 500,
+                                  cursor: historyPage >= Math.ceil(historyTotal / historyPageSize) ? 'not-allowed' : 'pointer',
+                                  transition: 'all 0.2s ease',
+                                }}
+                              >
+                                下一页
+                              </button>
+                            </div>
+                          )}
+                        </>
                       ) : (
                         <div style={{ textAlign: 'center', padding: '40px 0', color: '#6b7280' }}>
                           <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.3 }}>📊</div>
@@ -1490,46 +1681,6 @@ export default function ScanPage() {
             </div>
           ) : null}
 
-          {/* 产品图片卡片 */}
-          {product && product.image_128 && (
-            <div
-              style={{
-                background: '#fff',
-                border: '1px solid #e5e7eb',
-                borderRadius: 12,
-                padding: 14,
-                textAlign: 'center',
-              }}
-            >
-              <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 14 }}>产品图片</div>
-              <img
-                src={`data:image/png;base64,${product.image_128}`}
-                alt={product.name}
-                loading="lazy"
-                style={{
-                  maxWidth: '100%',
-                  maxHeight: '150px',
-                  borderRadius: 8,
-                  border: '1px solid #e5e7eb',
-                  objectFit: 'contain',
-                  backgroundColor: '#f9fafb',
-                  cursor: 'pointer',
-                }}
-                onClick={() => {
-                  setShowImageModal(true);
-                  if (!highResImage) {
-                    fetchHighResImage();
-                  }
-                }}
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
-              <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
-                点击查看大图
-              </div>
-            </div>
-          )}
 
         </div>
       </div>

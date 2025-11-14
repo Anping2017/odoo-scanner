@@ -69,11 +69,36 @@ export async function rpc(path: string, payload: any, sessionId: string, baseUrl
       agent: (url.startsWith('https:') ? httpsAgent : httpAgent)
     });
 
+    // 先读取响应文本，以便检查格式
+    const responseText = await res.text().catch(() => '');
+    
     if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`HTTP ${res.status} ${res.statusText} when calling ${url} :: ${text.slice(0, 300)}`);
+      if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
+        throw new Error(`Odoo返回了HTML错误页面 (HTTP ${res.status}): ${responseText.slice(0, 500)}`);
+      }
+      throw new Error(`HTTP ${res.status} ${res.statusText} when calling ${url} :: ${responseText.slice(0, 300)}`);
     }
-    const data = await res.json().catch(err => { throw new Error(`Invalid JSON from ${url}: ${String(err)}`); });
+    
+    // 检查Content-Type，如果不是JSON则可能是HTML错误页面
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
+        throw new Error(`Odoo返回了HTML错误页面，可能是会话过期或权限问题: ${responseText.slice(0, 500)}`);
+      }
+      throw new Error(`意外的Content-Type: ${contentType}, 响应: ${responseText.slice(0, 300)}`);
+    }
+    
+    // 尝试解析JSON
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (err) {
+      if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
+        throw new Error(`Odoo返回了HTML错误页面: ${responseText.slice(0, 500)}`);
+      }
+      throw new Error(`Invalid JSON from ${url}: ${String(err)}, 响应: ${responseText.slice(0, 300)}`);
+    }
+    
     if (data.error) {
       const msg = data.error?.data?.message || data.error?.message || 'Odoo RPC error';
       throw new Error(`${msg} @ ${url}`);
