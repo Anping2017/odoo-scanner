@@ -309,7 +309,7 @@ export default function ProductsPage() {
       }
       const categories = Array.isArray(data.categories) ? data.categories : [];
       // 过滤掉"Unset"和"Others"类别，去重并排序
-      const filteredCategories = categories.filter(cat => cat !== 'Unset' && cat !== 'Others');
+      const filteredCategories = categories.filter((cat: string) => cat !== 'Unset' && cat !== 'Others');
       const uniqueCategories = [...new Set(filteredCategories)].sort();
       setPosCategories(uniqueCategories);
     } catch (e) {
