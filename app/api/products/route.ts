@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
     const maxPrice = searchParams.get('max_price'); // 最高价格
     const searchMode = searchParams.get('search_mode') || 'fuzzy'; // 搜索模式：'fuzzy' 或 'exact'
     const sortField = searchParams.get('sort_field') || 'name'; // 排序字段
-    const sortOrder = searchParams.get('sort_order') || 'asc'; // 排序方向：'asc' 或 'desc'
+    const sortOrder = searchParams.get('sort_order') || 'desc'; // 排序方向：'asc' 或 'desc'
     const searchOnly = searchParams.get('search_only') === 'true'; // 只搜索模式：不进行筛选、排序、分页
 
     // 构建搜索条件 - 完美搜索方案
@@ -114,8 +114,10 @@ export async function GET(req: NextRequest) {
           keywords.forEach(k => parts.push({ type: 'fuzzy', value: k }));
         }
         
-        // 构建搜索条件：每个部分都要满足（AND关系）
-        // 使用展开运算符构建域，参考 parts-inventory 的实现
+        // 构建搜索条件：每个关键词必须在同一字段内匹配，不能跨字段匹配
+        // 多个关键词时，不要求顺序，不要求连续，但所有关键词必须在同一字段内出现
+        // 例如搜索"iphone 13 battery"，应该匹配名称中包含"iphone"、"13"、"battery"的产品
+        // 不区分大小写（ilike已支持），不要求关键词顺序和连续性
         if (parts.length === 1) {
           // 单个关键词：name OR default_code OR barcode
           searchDomain.push('|');
@@ -124,18 +126,45 @@ export async function GET(req: NextRequest) {
           searchDomain.push(['default_code', 'ilike', parts[0].value]);
           searchDomain.push(['barcode', 'ilike', parts[0].value]);
         } else if (parts.length > 1) {
-          // 多个关键词：每个关键词都要满足（AND关系）
-          // 第一个关键词的条件
-          let combinedCondition: any[] = ['|', '|', ['name', 'ilike', parts[0].value], ['default_code', 'ilike', parts[0].value], ['barcode', 'ilike', parts[0].value]];
+          // 多个关键词：每个字段内必须包含所有关键词（AND关系），不要求顺序和连续
+          // 构建条件：(name包含所有关键词) OR (default_code包含所有关键词) OR (barcode包含所有关键词)
           
-          // 后续关键词用AND连接
-          for (let i = 1; i < parts.length; i++) {
-            const nextCondition = ['|', '|', ['name', 'ilike', parts[i].value], ['default_code', 'ilike', parts[i].value], ['barcode', 'ilike', parts[i].value]];
-            combinedCondition = ['&', ...combinedCondition, ...nextCondition];
+          // 使用扁平化的AND格式：先构建三个独立的组，然后用OR连接
+          // 格式：['&', '&', condition1, condition2, condition3] 表示 condition1 AND condition2 AND condition3
+          
+          // 名称字段组：所有关键词都要在名称中出现（不要求顺序和连续）
+          const nameGroup: any[] = [];
+          for (let i = 0; i < parts.length - 1; i++) {
+            nameGroup.push('&');
+          }
+          for (let i = 0; i < parts.length; i++) {
+            nameGroup.push(['name', 'ilike', parts[i].value]);
           }
           
-          // 展开组合条件到searchDomain
-          searchDomain.push(...combinedCondition);
+          // SKU字段组：所有关键词都要在SKU中出现（不要求顺序和连续）
+          const skuGroup: any[] = [];
+          for (let i = 0; i < parts.length - 1; i++) {
+            skuGroup.push('&');
+          }
+          for (let i = 0; i < parts.length; i++) {
+            skuGroup.push(['default_code', 'ilike', parts[i].value]);
+          }
+          
+          // 条码字段组：所有关键词都要在条码中出现（不要求顺序和连续）
+          const barcodeGroup: any[] = [];
+          for (let i = 0; i < parts.length - 1; i++) {
+            barcodeGroup.push('&');
+          }
+          for (let i = 0; i < parts.length; i++) {
+            barcodeGroup.push(['barcode', 'ilike', parts[i].value]);
+          }
+          
+          // 用OR连接三个组
+          searchDomain.push('|');
+          searchDomain.push('|');
+          searchDomain.push(...nameGroup);
+          searchDomain.push(...skuGroup);
+          searchDomain.push(...barcodeGroup);
         }
       }
     }
@@ -315,6 +344,28 @@ export async function GET(req: NextRequest) {
       const templateIds = [...new Set(products.map((p: any) => p.product_tmpl_id?.[0]).filter(Boolean))];
       const productIds = products.map((p: any) => p.id).filter(Boolean);
 
+      // 如果有多公司环境，先获取属于当前公司的订单ID（用于过滤销售数量）
+      let companyOrderIds: number[] = [];
+      if (companyId) {
+        try {
+          const orderIdsResult = await rpc('/web/dataset/call_kw', {
+            model: 'pos.order',
+            method: 'search',
+            args: [[['company_id', '=', companyId]]],
+            kwargs: { 
+              limit: 50000, // 限制最大订单数，避免性能问题
+              context: ctx 
+            }
+          }, sessionId, base).catch(() => []);
+          
+          if (Array.isArray(orderIdsResult) && orderIdsResult.length > 0) {
+            companyOrderIds = orderIdsResult;
+          }
+        } catch (e) {
+          // 忽略错误，继续执行（如果没有订单，companyOrderIds为空数组）
+        }
+      }
+
       // 并行获取辅助数据（自定义字段、POS类别、销售数量、采购数量）
       const [
         customFieldsResult,
@@ -377,15 +428,24 @@ export async function GET(req: NextRequest) {
             return { templatesData: [], categoryMap: new Map() };
           }
         })(),
-        // 销售数量查询（简化版，不进行公司过滤以避免超时）
+        // 销售数量查询（带公司过滤，确保与销售订单记录一致）
         (async () => {
           if (productIds.length === 0) return [];
           try {
+            // 构建查询条件：产品ID + 公司过滤（如果有多公司环境）
+            const salesDomain: any[] = [['product_id', 'in', productIds]];
+            if (companyId && companyOrderIds.length > 0) {
+              salesDomain.push(['order_id', 'in', companyOrderIds]);
+            } else if (companyId && companyOrderIds.length === 0) {
+              // 如果有多公司环境但没有找到属于当前公司的订单，返回空结果
+              return [];
+            }
+            
             const salesData = await rpc('/web/dataset/call_kw', {
               model: 'pos.order.line',
               method: 'read_group',
               args: [
-                [['product_id', 'in', productIds]],
+                salesDomain,
                 ['qty'],
                 ['product_id'],
               ],
@@ -564,6 +624,28 @@ export async function GET(req: NextRequest) {
     const templateIds = [...new Set(products.map((p: any) => p.product_tmpl_id?.[0]).filter(Boolean))];
     const productIds = products.map((p: any) => p.id).filter(Boolean);
 
+    // 如果有多公司环境，先获取属于当前公司的订单ID（用于过滤销售数量）
+    let companyOrderIds: number[] = [];
+    if (companyId) {
+      try {
+        const orderIdsResult = await rpc('/web/dataset/call_kw', {
+          model: 'pos.order',
+          method: 'search',
+          args: [[['company_id', '=', companyId]]],
+          kwargs: { 
+            limit: 50000, // 限制最大订单数，避免性能问题
+            context: ctx 
+          }
+        }, sessionId, base).catch(() => []);
+        
+        if (Array.isArray(orderIdsResult) && orderIdsResult.length > 0) {
+          companyOrderIds = orderIdsResult;
+        }
+      } catch (e) {
+        // 忽略错误，继续执行（如果没有订单，companyOrderIds为空数组）
+      }
+    }
+
     // 4-7. 并行获取所有辅助数据（自定义字段、POS类别、销售数量、采购数量）
     // 使用Promise.all并行执行，大幅提升性能
     const [
@@ -639,17 +721,13 @@ export async function GET(req: NextRequest) {
       (async () => {
         if (productIds.length === 0) return [];
         
-        // 在多公司环境中，优化查询策略
-        // 使用order_id.company_id直接过滤，避免先获取大量订单ID
+        // 构建查询条件：产品ID + 公司过滤（如果有多公司环境）
         let salesDomain: any[] = [['product_id', 'in', productIds]];
-        
-        // 在多公司环境中，直接依赖Odoo的context进行公司过滤
-        // 不再获取订单ID列表，避免502/504错误
-        // 注意：这可能导致销售数量统计包含少量其他公司的数据，但可以避免超时和网关错误
-        if (companyId) {
-          // 直接使用context过滤，不添加订单ID过滤
-          // Odoo的context会自动应用公司过滤，虽然可能不够精确，但性能更好
-          // 如果需要精确过滤，可以考虑在应用层进行后处理
+        if (companyId && companyOrderIds.length > 0) {
+          salesDomain.push(['order_id', 'in', companyOrderIds]);
+        } else if (companyId && companyOrderIds.length === 0) {
+          // 如果有多公司环境但没有找到属于当前公司的订单，返回空结果
+          return [];
         }
         
         try {
@@ -936,6 +1014,28 @@ export async function GET(req: NextRequest) {
         const allProductIds = allProductsForFilter.map((p: any) => p.id);
         const allTemplateIds = [...new Set(allProductsForFilter.map((p: any) => p.product_tmpl_id?.[0]).filter(Boolean))];
 
+        // 如果有多公司环境，先获取属于当前公司的订单ID（用于过滤销售数量）
+        let companyOrderIds: number[] = [];
+        if (companyId) {
+          try {
+            const orderIdsResult = await rpc('/web/dataset/call_kw', {
+              model: 'pos.order',
+              method: 'search',
+              args: [[['company_id', '=', companyId]]],
+              kwargs: { 
+                limit: 50000, // 限制最大订单数，避免性能问题
+                context: ctx 
+              }
+            }, sessionId, base).catch(() => []);
+            
+            if (Array.isArray(orderIdsResult) && orderIdsResult.length > 0) {
+              companyOrderIds = orderIdsResult;
+            }
+          } catch (e) {
+            // 忽略错误，继续执行（如果没有订单，companyOrderIds为空数组）
+          }
+        }
+
         // 并行获取所有辅助数据（自定义字段、POS类别、销售数量、采购数量）
         const [
           allCustomFieldsResult,
@@ -1003,14 +1103,13 @@ export async function GET(req: NextRequest) {
           // 获取销售数量（优先使用read_group）
           // 注意：需要应用公司过滤，确保与销售订单列表一致
           (async () => {
-            // 在多公司环境中，优化订单ID获取策略
+            // 构建查询条件：产品ID + 公司过滤（如果有多公司环境）
             let salesDomain: any[] = [['product_id', 'in', allProductIds]];
-            
-            // 在多公司环境中，直接依赖Odoo的context进行公司过滤
-            // 不再获取订单ID列表，避免502/504错误
-            if (companyId) {
-              // 直接使用context过滤，不添加订单ID过滤
-              // Odoo的context会自动应用公司过滤，虽然可能不够精确，但性能更好
+            if (companyId && companyOrderIds.length > 0) {
+              salesDomain.push(['order_id', 'in', companyOrderIds]);
+            } else if (companyId && companyOrderIds.length === 0) {
+              // 如果有多公司环境但没有找到属于当前公司的订单，返回空结果
+              return [];
             }
             
             try {

@@ -44,9 +44,10 @@ export default function ProductsPage() {
   const [selectedPosCategories, setSelectedPosCategories] = useState<string[]>([]); // 选中的POS类别（多选）
   const [minPrice, setMinPrice] = useState<string>(''); // 最低价格
   const [maxPrice, setMaxPrice] = useState<string>(''); // 最高价格
+  const [quickFilter, setQuickFilter] = useState<'case' | 'screen_protector' | 'battery' | 'screen' | 'back_cover' | null>(null); // 快捷查找
   const [searchMode, setSearchMode] = useState<'fuzzy' | 'exact' | 'name' | 'sku'>('fuzzy'); // 搜索模式：模糊/精确/按名称/按SKU
   const [sortField, setSortField] = useState<string>('name'); // 排序字段
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc'); // 排序方向
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc'); // 排序方向
   const [showFilters, setShowFilters] = useState<boolean>(true); // 显示/隐藏筛选器
   const [showSort, setShowSort] = useState<boolean>(true); // 显示/隐藏排序器
 
@@ -63,7 +64,7 @@ export default function ProductsPage() {
   // 筛选条件变化时重置到第一页
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterStoreStock, filterHeadquartersStock, selectedPosCategories, minPrice, maxPrice, searchMode, sortField, sortOrder]);
+  }, [filterStoreStock, filterHeadquartersStock, selectedPosCategories, minPrice, maxPrice, quickFilter, searchMode, sortField, sortOrder]);
 
   // 当搜索词变化时，重置缓存和分页
   useEffect(() => {
@@ -183,6 +184,47 @@ export default function ProductsPage() {
       }
     }
 
+    // 应用快捷查找筛选
+    if (quickFilter !== null) {
+      const nameLower = (product: Product) => product.name.toLowerCase();
+      const categoryLower = (product: Product) => product.pos_category.toLowerCase();
+      
+      switch (quickFilter) {
+        case 'case':
+          filtered = filtered.filter(p => 
+            nameLower(p).includes('case') && categoryLower(p) === 'accessories'
+          );
+          break;
+        case 'screen_protector':
+          filtered = filtered.filter(p => 
+            nameLower(p).includes('screen protector') && categoryLower(p) === 'accessories'
+          );
+          break;
+        case 'battery':
+          filtered = filtered.filter(p => 
+            nameLower(p).includes('battery') && categoryLower(p) === 'parts'
+          );
+          break;
+        case 'screen':
+          filtered = filtered.filter(p => 
+            nameLower(p).includes('screen') && categoryLower(p) === 'parts'
+          );
+          break;
+        case 'back_cover':
+          filtered = filtered.filter(p => {
+            const name = nameLower(p);
+            const category = categoryLower(p);
+            return category === 'parts' && (
+              name.includes('back cover') || 
+              name.includes('back glass') || 
+              name.includes('backglass') || 
+              name.includes('backcover')
+            );
+          });
+          break;
+      }
+    }
+
     // 应用排序
     filtered.sort((a, b) => {
       let aValue: any;
@@ -233,7 +275,7 @@ export default function ProductsPage() {
     setProducts(paginated);
     setTotalCount(total);
     setTotalPages(totalPages);
-  }, [cachedProducts, filterStoreStock, filterHeadquartersStock, sortField, sortOrder, currentPage, pageSize]);
+  }, [cachedProducts, filterStoreStock, filterHeadquartersStock, quickFilter, sortField, sortOrder, currentPage, pageSize]);
 
   // 当搜索词变化时，从API加载（只在有搜索条件时）
   useEffect(() => {
@@ -1051,7 +1093,7 @@ export default function ProductsPage() {
                 fontSize: '12px'
               }}>▼</span>
               <span>筛选条件</span>
-              {(filterStoreStock !== null || filterHeadquartersStock !== null || selectedPosCategories.length > 0 || minPrice || maxPrice) && (
+              {(filterStoreStock !== null || filterHeadquartersStock !== null || selectedPosCategories.length > 0 || minPrice || maxPrice || quickFilter !== null) && (
                 <span style={{
                   fontSize: '11px',
                   padding: '2px 6px',
@@ -1065,7 +1107,8 @@ export default function ProductsPage() {
                     filterHeadquartersStock !== null ? 1 : 0,
                     selectedPosCategories.length,
                     minPrice ? 1 : 0,
-                    maxPrice ? 1 : 0
+                    maxPrice ? 1 : 0,
+                    quickFilter !== null ? 1 : 0
                   ].reduce((a, b) => a + b, 0)}
                 </span>
               )}
@@ -1327,6 +1370,126 @@ export default function ProductsPage() {
               )}
             </div>
 
+            {/* 快捷查找筛选 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', width: '100%' }}>
+              <span style={{ fontSize: '13px', color: '#6b7280', flexShrink: 0 }}>快捷查找：</span>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', flex: 1, alignItems: 'center' }}>
+                <button
+                  className="filter-buttons"
+                  onClick={() => setQuickFilter(null)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #e5e7eb',
+                    background: quickFilter === null ? '#667eea' : '#fff',
+                    color: quickFilter === null ? '#fff' : '#374151',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  全部
+                </button>
+                <button
+                  className="filter-buttons"
+                  onClick={() => setQuickFilter('case')}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: `1px solid ${quickFilter === 'case' ? '#667eea' : '#e5e7eb'}`,
+                    background: quickFilter === 'case' ? '#667eea' : '#fff',
+                    color: quickFilter === 'case' ? '#fff' : '#374151',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    whiteSpace: 'nowrap',
+                    boxShadow: quickFilter === 'case' ? '0 1px 3px rgba(102, 126, 234, 0.3)' : 'none'
+                  }}
+                >
+                  Case
+                </button>
+                <button
+                  className="filter-buttons"
+                  onClick={() => setQuickFilter('screen_protector')}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: `1px solid ${quickFilter === 'screen_protector' ? '#667eea' : '#e5e7eb'}`,
+                    background: quickFilter === 'screen_protector' ? '#667eea' : '#fff',
+                    color: quickFilter === 'screen_protector' ? '#fff' : '#374151',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    whiteSpace: 'nowrap',
+                    boxShadow: quickFilter === 'screen_protector' ? '0 1px 3px rgba(102, 126, 234, 0.3)' : 'none'
+                  }}
+                >
+                  Screen Protector
+                </button>
+                <button
+                  className="filter-buttons"
+                  onClick={() => setQuickFilter('battery')}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: `1px solid ${quickFilter === 'battery' ? '#667eea' : '#e5e7eb'}`,
+                    background: quickFilter === 'battery' ? '#667eea' : '#fff',
+                    color: quickFilter === 'battery' ? '#fff' : '#374151',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    whiteSpace: 'nowrap',
+                    boxShadow: quickFilter === 'battery' ? '0 1px 3px rgba(102, 126, 234, 0.3)' : 'none'
+                  }}
+                >
+                  Battery
+                </button>
+                <button
+                  className="filter-buttons"
+                  onClick={() => setQuickFilter('screen')}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: `1px solid ${quickFilter === 'screen' ? '#667eea' : '#e5e7eb'}`,
+                    background: quickFilter === 'screen' ? '#667eea' : '#fff',
+                    color: quickFilter === 'screen' ? '#fff' : '#374151',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    whiteSpace: 'nowrap',
+                    boxShadow: quickFilter === 'screen' ? '0 1px 3px rgba(102, 126, 234, 0.3)' : 'none'
+                  }}
+                >
+                  Screen
+                </button>
+                <button
+                  className="filter-buttons"
+                  onClick={() => setQuickFilter('back_cover')}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: `1px solid ${quickFilter === 'back_cover' ? '#667eea' : '#e5e7eb'}`,
+                    background: quickFilter === 'back_cover' ? '#667eea' : '#fff',
+                    color: quickFilter === 'back_cover' ? '#fff' : '#374151',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    whiteSpace: 'nowrap',
+                    boxShadow: quickFilter === 'back_cover' ? '0 1px 3px rgba(102, 126, 234, 0.3)' : 'none'
+                  }}
+                >
+                  Back Cover/Glass
+                </button>
+              </div>
+            </div>
+
             {/* 价格筛选 */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '13px', color: '#6b7280' }}>价格范围：</span>
@@ -1519,8 +1682,8 @@ export default function ProductsPage() {
                 padding: '6px 12px',
                 borderRadius: '6px',
                 border: '1px solid #e5e7eb',
-                background: sortOrder === 'asc' ? '#f0f4ff' : '#fff',
-                color: sortOrder === 'asc' ? '#667eea' : '#374151',
+                background: sortOrder === 'desc' ? '#f0f4ff' : '#fff',
+                color: sortOrder === 'desc' ? '#667eea' : '#374151',
                 fontSize: '12px',
                 fontWeight: 500,
                 cursor: 'pointer',
