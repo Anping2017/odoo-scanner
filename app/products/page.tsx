@@ -307,10 +307,10 @@ export default function ProductsPage() {
         console.warn('加载POS类别失败:', data.error);
         return;
       }
-      const categories = Array.isArray(data.categories) ? data.categories : [];
+      const categories = Array.isArray(data.categories) ? (data.categories as string[]) : [];
       // 过滤掉"Unset"和"Others"类别，去重并排序
       const filteredCategories = categories.filter((cat: string) => cat !== 'Unset' && cat !== 'Others');
-      const uniqueCategories = [...new Set(filteredCategories)].sort();
+      const uniqueCategories = [...new Set(filteredCategories)].sort() as string[];
       setPosCategories(uniqueCategories);
     } catch (e) {
       console.warn('加载POS类别失败:', e);
