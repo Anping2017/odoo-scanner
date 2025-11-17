@@ -28,9 +28,12 @@ export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [apiSearchTerm, setApiSearchTerm] = useState(''); // API搜索词（防抖）
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(20);
+  const [pageSize, setPageSize] = useState<number | 'all'>(20);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [viewMode, setViewMode] = useState<'detailed' | 'list' | 'grid'>('detailed'); // 视图模式：详细、列表、网格
+  const [showProductDetailModal, setShowProductDetailModal] = useState(false); // 显示产品详情模态框（用于网格视图）
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null); // 选中的产品（用于网格视图）
   const [showImageModal, setShowImageModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [showSalesModal, setShowSalesModal] = useState(false);
@@ -71,7 +74,7 @@ export default function ProductsPage() {
   // 筛选条件变化时重置到第一页
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterStoreStock, filterHeadquartersStock, selectedPosCategories, minPrice, maxPrice, quickFilter, searchMode, sortField, sortOrder, resultSearchInclude, resultSearchExclude]);
+  }, [filterStoreStock, filterHeadquartersStock, selectedPosCategories, minPrice, maxPrice, quickFilter, searchMode, sortField, sortOrder, resultSearchInclude, resultSearchExclude, pageSize]);
 
   // 当搜索词变化时，重置缓存和分页
   useEffect(() => {
@@ -141,6 +144,11 @@ export default function ProductsPage() {
         clearTimeout(timeoutId);
         
         if (!res.ok) {
+          if (res.status === 401) {
+            // 未登录，重定向到登录页
+            window.location.href = '/';
+            return;
+          }
           if (res.status === 504) {
             throw new Error('请求超时，请尝试缩小搜索范围或稍后重试');
           }
@@ -150,6 +158,11 @@ export default function ProductsPage() {
         const data = await res.json();
 
         if (data.error) {
+          // 检查是否是未登录错误
+          if (data.error.includes('未登录') || data.error.includes('未认证') || data.error.includes('Unauthorized')) {
+            window.location.href = '/';
+            return;
+          }
           throw new Error(data.error);
         }
 
@@ -242,36 +255,32 @@ export default function ProductsPage() {
 
     // 应用"在结果中搜索"筛选
     if (enableResultSearch) {
-      // 从结果中搜索（包含）：产品名称、SKU或条码中包含关键词
+      // 从结果中搜索（包含）：产品名称或SKU中包含关键词
       if (resultSearchInclude.trim()) {
         const includeKeywords = resultSearchInclude.trim().toLowerCase().split(/\s+/).filter(k => k.length > 0);
         filtered = filtered.filter(p => {
           const nameLower = p.name.toLowerCase();
           const skuLower = (p.default_code || '').toLowerCase();
-          const barcodeLower = (p.barcode || '').toLowerCase();
           
-          // 所有关键词都要在名称、SKU或条码中出现（不要求顺序和连续）
+          // 所有关键词都要在名称或SKU中出现（不要求顺序和连续）
           return includeKeywords.every(keyword => 
             nameLower.includes(keyword) || 
-            skuLower.includes(keyword) || 
-            barcodeLower.includes(keyword)
+            skuLower.includes(keyword)
           );
         });
       }
       
-      // 从结果中排除：产品名称、SKU或条码中不包含关键词
+      // 从结果中排除：产品名称或SKU中不包含关键词
       if (resultSearchExclude.trim()) {
         const excludeKeywords = resultSearchExclude.trim().toLowerCase().split(/\s+/).filter(k => k.length > 0);
         filtered = filtered.filter(p => {
           const nameLower = p.name.toLowerCase();
           const skuLower = (p.default_code || '').toLowerCase();
-          const barcodeLower = (p.barcode || '').toLowerCase();
           
           // 排除包含任何排除关键词的产品
           return !excludeKeywords.some(keyword => 
             nameLower.includes(keyword) || 
-            skuLower.includes(keyword) || 
-            barcodeLower.includes(keyword)
+            skuLower.includes(keyword)
           );
         });
       }
@@ -287,9 +296,21 @@ export default function ProductsPage() {
           aValue = a.name.toLowerCase();
           bValue = b.name.toLowerCase();
           break;
+        case 'default_code':
+          aValue = (a.default_code || '').toLowerCase();
+          bValue = (b.default_code || '').toLowerCase();
+          break;
+        case 'pos_category':
+          aValue = a.pos_category.toLowerCase();
+          bValue = b.pos_category.toLowerCase();
+          break;
         case 'list_price':
           aValue = a.list_price;
           bValue = b.list_price;
+          break;
+        case 'standard_price':
+          aValue = a.standard_price;
+          bValue = b.standard_price;
           break;
         case 'raytech_p3':
           aValue = a.raytech_p3 ?? 0;
@@ -298,6 +319,10 @@ export default function ProductsPage() {
         case 'qty_available':
           aValue = a.qty_available;
           bValue = b.qty_available;
+          break;
+        case 'raytech_stock':
+          aValue = a.raytech_stock ?? 0;
+          bValue = b.raytech_stock ?? 0;
           break;
         case 'sales_quantity':
           aValue = a.sales_quantity;
@@ -319,10 +344,19 @@ export default function ProductsPage() {
 
     // 计算分页
     const total = filtered.length;
-    const totalPages = Math.ceil(total / pageSize);
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    const paginated = filtered.slice(startIndex, endIndex);
+    let paginated: Product[];
+    let totalPages: number;
+    
+    if (pageSize === 'all') {
+      // 显示全部产品
+      paginated = filtered;
+      totalPages = 1;
+    } else {
+      totalPages = Math.ceil(total / pageSize);
+      const startIndex = (currentPage - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      paginated = filtered.slice(startIndex, endIndex);
+    }
 
     setProducts(paginated);
     setTotalCount(total);
@@ -366,12 +400,20 @@ export default function ProductsPage() {
       });
       
       if (!res.ok) {
+        if (res.status === 401) {
+          window.location.href = '/';
+          return;
+        }
         throw new Error(`HTTP ${res.status}: ${res.statusText}`);
       }
 
       const data = await res.json();
 
       if (data.error) {
+        if (data.error.includes('未登录') || data.error.includes('未认证') || data.error.includes('Unauthorized')) {
+          window.location.href = '/';
+          return;
+        }
         throw new Error(data.error);
       }
 
@@ -418,11 +460,10 @@ export default function ProductsPage() {
       filtered = filtered.filter(p => {
         const nameLower = p.name.toLowerCase();
         const skuLower = (p.default_code || '').toLowerCase();
-        const barcodeLower = (p.barcode || '').toLowerCase();
         
         if (searchMode === 'exact') {
           // 精确搜索
-          return nameLower === searchTerm || skuLower === searchTerm || barcodeLower === searchTerm;
+          return nameLower === searchTerm || skuLower === searchTerm;
         } else if (searchMode === 'name') {
           // 按名称搜索
           return keywords.every(k => nameLower.includes(k));
@@ -433,8 +474,7 @@ export default function ProductsPage() {
           // 模糊搜索
           return keywords.every(k => 
             nameLower.includes(k) || 
-            skuLower.includes(k) || 
-            barcodeLower.includes(k)
+            skuLower.includes(k)
           );
         }
       });
@@ -466,15 +506,15 @@ export default function ProductsPage() {
       searchOfflineData();
     } else {
       // 在线模式：从API加载
-      if (apiSearchTerm.trim() || selectedPosCategories.length > 0 || minPrice || maxPrice) {
-        loadSearchResults();
-      } else {
-        // 如果没有搜索条件，清空缓存和产品列表
-        setCachedProducts([]);
-        setProducts([]);
-        setTotalCount(0);
-        setTotalPages(1);
-      }
+    if (apiSearchTerm.trim() || selectedPosCategories.length > 0 || minPrice || maxPrice) {
+      loadSearchResults();
+    } else {
+      // 如果没有搜索条件，清空缓存和产品列表
+      setCachedProducts([]);
+      setProducts([]);
+      setTotalCount(0);
+      setTotalPages(1);
+    }
     }
   }, [offlineMode, offlineData, apiSearchTerm, searchMode, selectedPosCategories, minPrice, maxPrice, loadSearchResults, searchOfflineData]);
 
@@ -495,8 +535,19 @@ export default function ProductsPage() {
     setOrdersLoading(true);
     try {
       const res = await fetch(`/api/sales-history?product_id=${productId}&page=1&page_size=500`, { cache: 'no-store' });
+      if (!res.ok) {
+        if (res.status === 401) {
+          window.location.href = '/';
+          return;
+        }
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
       const data = await res.json();
       if (data.error) {
+        if (data.error.includes('未登录') || data.error.includes('未认证') || data.error.includes('Unauthorized')) {
+          window.location.href = '/';
+          return;
+        }
         throw new Error(data.error);
       }
       setSalesOrders(Array.isArray(data.salesHistory) ? data.salesHistory : []);
@@ -527,8 +578,19 @@ export default function ProductsPage() {
     setOrdersLoading(true);
     try {
       const res = await fetch(`/api/purchase-history?product_id=${productId}&page=1&page_size=500`, { cache: 'no-store' });
+      if (!res.ok) {
+        if (res.status === 401) {
+          window.location.href = '/';
+          return;
+        }
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
       const data = await res.json();
       if (data.error) {
+        if (data.error.includes('未登录') || data.error.includes('未认证') || data.error.includes('Unauthorized')) {
+          window.location.href = '/';
+          return;
+        }
         throw new Error(data.error);
       }
       // API返回的字段是purchases，不是purchaseHistory
@@ -545,16 +607,53 @@ export default function ProductsPage() {
   const loadPosCategories = useCallback(async () => {
     try {
       const res = await fetch('/api/pos-categories', { cache: 'no-store' });
+      if (!res.ok) {
+        if (res.status === 401) {
+          window.location.href = '/';
+          return;
+        }
+        console.warn('加载POS类别失败:', `HTTP ${res.status}`);
+        return;
+      }
       const data = await res.json();
       if (data.error) {
+        if (data.error.includes('未登录') || data.error.includes('未认证') || data.error.includes('Unauthorized')) {
+          window.location.href = '/';
+          return;
+        }
         console.warn('加载POS类别失败:', data.error);
         return;
       }
       const categories = Array.isArray(data.categories) ? (data.categories as string[]) : [];
-      // 过滤掉"Unset"和"Others"类别，去重并排序
+      // 过滤掉"Unset"和"Others"类别，去重
       const filteredCategories = categories.filter((cat: string) => cat !== 'Unset' && cat !== 'Others');
-      const uniqueCategories = [...new Set(filteredCategories)].sort() as string[];
-      setPosCategories(uniqueCategories);
+      const uniqueCategories = [...new Set(filteredCategories)];
+      
+      // 定义排序顺序
+      const sortOrder = ['Phone', 'Tablets', 'Laptop & Others', 'Accessories', 'Parts', 'Repairs'];
+      
+      // 按照指定顺序排序
+      const sortedCategories = uniqueCategories.sort((a, b) => {
+        const indexA = sortOrder.indexOf(a);
+        const indexB = sortOrder.indexOf(b);
+        
+        // 如果两个都在排序列表中，按照列表顺序排序
+        if (indexA !== -1 && indexB !== -1) {
+          return indexA - indexB;
+        }
+        // 如果只有a在排序列表中，a排在前面
+        if (indexA !== -1) {
+          return -1;
+        }
+        // 如果只有b在排序列表中，b排在前面
+        if (indexB !== -1) {
+          return 1;
+        }
+        // 如果都不在排序列表中，按字母顺序排序
+        return a.localeCompare(b);
+      });
+      
+      setPosCategories(sortedCategories);
     } catch (e) {
       console.warn('加载POS类别失败:', e);
     }
@@ -580,6 +679,19 @@ export default function ProductsPage() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, [totalPages]);
+
+  // 表格列排序处理
+  const handleColumnSort = useCallback((field: string) => {
+    if (sortField === field) {
+      // 如果点击的是当前排序字段，切换排序方向
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      // 如果点击的是新字段，设置该字段为排序字段，默认降序
+      setSortField(field);
+      setSortOrder('desc');
+    }
+    setCurrentPage(1); // 排序后重置到第一页
+  }, [sortField, sortOrder]);
 
   // 筛选已在API层面完成，这里直接使用products
   const filteredProducts = products;
@@ -947,7 +1059,8 @@ export default function ProductsPage() {
       ` }} />
 
       <div className="products-container" style={{ 
-        maxWidth: '1400px', 
+        maxWidth: '95%', 
+        width: '100%',
         margin: '0 auto', 
         padding: '20px',
         minHeight: '100vh',
@@ -1272,7 +1385,7 @@ export default function ProductsPage() {
                   searchMode === 'fuzzy' 
                     ? '🔍 输入关键词搜索（支持多关键词，用空格分隔）...' 
                     : searchMode === 'exact'
-                    ? '🎯 输入完整的产品名称、SKU或条码...'
+                    ? '🎯 输入完整的产品名称或SKU...'
                     : searchMode === 'name'
                     ? '📝 输入产品名称搜索...'
                     : '🏷️ 输入SKU搜索...'
@@ -1320,17 +1433,17 @@ export default function ProductsPage() {
                 ) : searchMode === 'exact' ? (
                   <>
                     <span style={{ color: '#667eea', fontWeight: 500 }}>💡 精确搜索：</span>
-                    完全匹配产品名称、SKU或条码（不区分大小写）
+                    完全匹配产品名称或SKU（不区分大小写）
                   </>
                 ) : searchMode === 'name' ? (
                   <>
                     <span style={{ color: '#667eea', fontWeight: 500 }}>💡 按名称搜索：</span>
-                    仅在产品名称中搜索（不搜索SKU和条码），支持模糊匹配
+                    仅在产品名称中搜索（不搜索SKU），支持模糊匹配
                   </>
                 ) : (
                   <>
                     <span style={{ color: '#667eea', fontWeight: 500 }}>💡 按SKU搜索：</span>
-                    仅在SKU（产品编码）中搜索（不搜索名称和条码），支持模糊匹配
+                    仅在SKU（产品编码）中搜索（不搜索名称），支持模糊匹配
                   </>
                 )}
               </div>
@@ -1460,7 +1573,7 @@ export default function ProductsPage() {
                   </label>
                   <input
                     type="text"
-                    placeholder="输入关键词，支持多关键词（空格分隔）"
+                    placeholder="输入关键词，支持多关键词（空格分隔），排除产品名称或SKU"
                     value={resultSearchExclude}
                     onChange={(e) => setResultSearchExclude(e.target.value)}
                     style={{
@@ -1580,32 +1693,32 @@ export default function ProductsPage() {
                   🗑️ 清除筛选
                 </button>
               )}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowFilters(!showFilters);
-                }}
-                style={{
-                  padding: '4px 8px',
-                  borderRadius: '6px',
-                  border: '1px solid #e5e7eb',
-                  background: 'transparent',
-                  color: '#6b7280',
-                  fontSize: '12px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#f3f4f6';
-                  e.currentTarget.style.borderColor = '#d1d5db';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.borderColor = '#e5e7eb';
-                }}
-              >
-                {showFilters ? '收起' : '展开'}
-              </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowFilters(!showFilters);
+              }}
+              style={{
+                padding: '4px 8px',
+                borderRadius: '6px',
+                border: '1px solid #e5e7eb',
+                background: 'transparent',
+                color: '#6b7280',
+                fontSize: '12px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#f3f4f6';
+                e.currentTarget.style.borderColor = '#d1d5db';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.borderColor = '#e5e7eb';
+              }}
+            >
+              {showFilters ? '收起' : '展开'}
+            </button>
             </div>
           </div>
           
@@ -2171,6 +2284,110 @@ export default function ProductsPage() {
               {sortOrder === 'asc' ? '↑ 升序' : '↓ 降序'}
             </button>
             </div>
+            
+            {/* 视图模式切换 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: '#374151', flexShrink: 0 }}>视图：</span>
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                <button
+                  onClick={() => setViewMode('detailed')}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: `1px solid ${viewMode === 'detailed' ? '#667eea' : '#e5e7eb'}`,
+                    background: viewMode === 'detailed' ? '#667eea' : '#fff',
+                    color: viewMode === 'detailed' ? '#fff' : '#374151',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    whiteSpace: 'nowrap'
+                  }}
+                  title="详细模式"
+                >
+                  📋 详细
+                </button>
+                <button
+                  onClick={() => setViewMode('list')}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: `1px solid ${viewMode === 'list' ? '#667eea' : '#e5e7eb'}`,
+                    background: viewMode === 'list' ? '#667eea' : '#fff',
+                    color: viewMode === 'list' ? '#fff' : '#374151',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    whiteSpace: 'nowrap'
+                  }}
+                  title="列表模式（无照片）"
+                >
+                  📝 列表
+                </button>
+                <button
+                  onClick={() => setViewMode('grid')}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: `1px solid ${viewMode === 'grid' ? '#667eea' : '#e5e7eb'}`,
+                    background: viewMode === 'grid' ? '#667eea' : '#fff',
+                    color: viewMode === 'grid' ? '#fff' : '#374151',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    whiteSpace: 'nowrap'
+                  }}
+                  title="网格模式（小图标）"
+                >
+                  🖼️ 网格
+                </button>
+              </div>
+            </div>
+            
+            {/* 分页数量选择 */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: '#374151', flexShrink: 0 }}>每页：</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === 'all') {
+                    setPageSize('all');
+                  } else {
+                    setPageSize(parseInt(value));
+                  }
+                  setCurrentPage(1);
+                }}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #e5e7eb',
+                  background: '#fff',
+                  color: '#374151',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  minWidth: '80px'
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = '#667eea';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#e5e7eb';
+                }}
+              >
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+                <option value="500">500</option>
+                <option value="all">全部</option>
+              </select>
+            </div>
           </div>
           )}
         </div>
@@ -2224,9 +2441,436 @@ export default function ProductsPage() {
 
         {/* 产品列表 */}
         {!loading && products.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          viewMode === 'list' ? (
+            filteredProducts.length > 0 ? (
+              // 表格视图（Excel风格）
+              <div style={{
+                background: '#fff',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                border: '1px solid #e5e7eb'
+              }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{
+                    width: '100%',
+                    borderCollapse: 'collapse',
+                    fontSize: '13px'
+                  }}>
+                    <thead>
+                      <tr style={{
+                        background: '#f9fafb',
+                        borderBottom: '2px solid #e5e7eb'
+                      }}>
+                        <th 
+                          onClick={() => handleColumnSort('name')}
+                          style={{
+                            padding: '10px 12px',
+                            textAlign: 'left',
+                            fontWeight: 600,
+                            color: '#374151',
+                            fontSize: '12px',
+                            whiteSpace: 'nowrap',
+                            position: 'sticky',
+                            left: 0,
+                            background: sortField === 'name' ? '#f0f4ff' : '#f9fafb',
+                            zIndex: 10,
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            transition: 'all 0.2s ease',
+                            minWidth: '300px',
+                            width: '25%'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = sortField === 'name' ? '#e0e7ff' : '#f3f4f6';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = sortField === 'name' ? '#f0f4ff' : '#f9fafb';
+                          }}
+                        >
+                          产品名称{sortField === 'name' && (
+                            <span style={{ color: '#667eea', fontSize: '10px', marginLeft: '4px' }}>
+                              {sortOrder === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </th>
+                        <th 
+                          onClick={() => handleColumnSort('default_code')}
+                          style={{
+                            padding: '10px 12px',
+                            textAlign: 'left',
+                            fontWeight: 600,
+                            color: '#374151',
+                            fontSize: '12px',
+                            whiteSpace: 'nowrap',
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            transition: 'all 0.2s ease',
+                            background: sortField === 'default_code' ? '#f0f4ff' : '#f9fafb'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = sortField === 'default_code' ? '#e0e7ff' : '#f3f4f6';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = sortField === 'default_code' ? '#f0f4ff' : '#f9fafb';
+                          }}
+                        >
+                          SKU{sortField === 'default_code' && (
+                            <span style={{ color: '#667eea', fontSize: '10px', marginLeft: '4px' }}>
+                              {sortOrder === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </th>
+                        <th 
+                          onClick={() => handleColumnSort('pos_category')}
+                          style={{
+                            padding: '10px 12px',
+                            textAlign: 'left',
+                            fontWeight: 600,
+                            color: '#374151',
+                            fontSize: '12px',
+                            whiteSpace: 'nowrap',
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            transition: 'all 0.2s ease',
+                            background: sortField === 'pos_category' ? '#f0f4ff' : '#f9fafb'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = sortField === 'pos_category' ? '#e0e7ff' : '#f3f4f6';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = sortField === 'pos_category' ? '#f0f4ff' : '#f9fafb';
+                          }}
+                        >
+                          POS类别{sortField === 'pos_category' && (
+                            <span style={{ color: '#667eea', fontSize: '10px', marginLeft: '4px' }}>
+                              {sortOrder === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </th>
+                        <th 
+                          onClick={() => handleColumnSort('list_price')}
+                          style={{
+                            padding: '10px 12px',
+                            textAlign: 'right',
+                            fontWeight: 600,
+                            color: '#374151',
+                            fontSize: '12px',
+                            whiteSpace: 'nowrap',
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            transition: 'all 0.2s ease',
+                            background: sortField === 'list_price' ? '#f0f4ff' : '#f9fafb'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = sortField === 'list_price' ? '#e0e7ff' : '#f3f4f6';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = sortField === 'list_price' ? '#f0f4ff' : '#f9fafb';
+                          }}
+                        >
+                          售价{sortField === 'list_price' && (
+                            <span style={{ color: '#667eea', fontSize: '10px', marginLeft: '4px' }}>
+                              {sortOrder === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </th>
+                        <th 
+                          onClick={() => handleColumnSort('standard_price')}
+                          style={{
+                            padding: '10px 12px',
+                            textAlign: 'right',
+                            fontWeight: 600,
+                            color: '#374151',
+                            fontSize: '12px',
+                            whiteSpace: 'nowrap',
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            transition: 'all 0.2s ease',
+                            background: sortField === 'standard_price' ? '#f0f4ff' : '#f9fafb'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = sortField === 'standard_price' ? '#e0e7ff' : '#f3f4f6';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = sortField === 'standard_price' ? '#f0f4ff' : '#f9fafb';
+                          }}
+                        >
+                          成本{sortField === 'standard_price' && (
+                            <span style={{ color: '#667eea', fontSize: '10px', marginLeft: '4px' }}>
+                              {sortOrder === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </th>
+                        <th 
+                          onClick={() => handleColumnSort('qty_available')}
+                          style={{
+                            padding: '10px 12px',
+                            textAlign: 'right',
+                            fontWeight: 600,
+                            color: '#374151',
+                            fontSize: '12px',
+                            whiteSpace: 'nowrap',
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            transition: 'all 0.2s ease',
+                            background: sortField === 'qty_available' ? '#f0f4ff' : '#f9fafb'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = sortField === 'qty_available' ? '#e0e7ff' : '#f3f4f6';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = sortField === 'qty_available' ? '#f0f4ff' : '#f9fafb';
+                          }}
+                        >
+                          当前库存{sortField === 'qty_available' && (
+                            <span style={{ color: '#667eea', fontSize: '10px', marginLeft: '4px' }}>
+                              {sortOrder === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </th>
+                        <th 
+                          onClick={() => handleColumnSort('raytech_stock')}
+                          style={{
+                            padding: '10px 12px',
+                            textAlign: 'right',
+                            fontWeight: 600,
+                            color: '#374151',
+                            fontSize: '12px',
+                            whiteSpace: 'nowrap',
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            transition: 'all 0.2s ease',
+                            background: sortField === 'raytech_stock' ? '#f0f4ff' : '#f9fafb'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = sortField === 'raytech_stock' ? '#e0e7ff' : '#f3f4f6';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = sortField === 'raytech_stock' ? '#f0f4ff' : '#f9fafb';
+                          }}
+                        >
+                          总部库存{sortField === 'raytech_stock' && (
+                            <span style={{ color: '#667eea', fontSize: '10px', marginLeft: '4px' }}>
+                              {sortOrder === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </th>
+                        <th 
+                          onClick={() => handleColumnSort('sales_quantity')}
+                          style={{
+                            padding: '10px 12px',
+                            textAlign: 'right',
+                            fontWeight: 600,
+                            color: '#374151',
+                            fontSize: '12px',
+                            whiteSpace: 'nowrap',
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            transition: 'all 0.2s ease',
+                            background: sortField === 'sales_quantity' ? '#f0f4ff' : '#f9fafb'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = sortField === 'sales_quantity' ? '#e0e7ff' : '#f3f4f6';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = sortField === 'sales_quantity' ? '#f0f4ff' : '#f9fafb';
+                          }}
+                        >
+                          销售数量{sortField === 'sales_quantity' && (
+                            <span style={{ color: '#667eea', fontSize: '10px', marginLeft: '4px' }}>
+                              {sortOrder === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </th>
+                        <th 
+                          onClick={() => handleColumnSort('purchase_quantity')}
+                          style={{
+                            padding: '10px 12px',
+                            textAlign: 'right',
+                            fontWeight: 600,
+                            color: '#374151',
+                            fontSize: '12px',
+                            whiteSpace: 'nowrap',
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            transition: 'all 0.2s ease',
+                            background: sortField === 'purchase_quantity' ? '#f0f4ff' : '#f9fafb'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = sortField === 'purchase_quantity' ? '#e0e7ff' : '#f3f4f6';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = sortField === 'purchase_quantity' ? '#f0f4ff' : '#f9fafb';
+                          }}
+                        >
+                          采购数量{sortField === 'purchase_quantity' && (
+                            <span style={{ color: '#667eea', fontSize: '10px', marginLeft: '4px' }}>
+                              {sortOrder === 'asc' ? '↑' : '↓'}
+                            </span>
+                          )}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredProducts.map((product, index) => (
+                        <tr
+                          key={product.id}
+                          style={{
+                            borderBottom: '1px solid #f3f4f6',
+                            transition: 'all 0.15s ease',
+                            cursor: 'pointer'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#f9fafb';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = '#fff';
+                          }}
+                        >
+                          <td style={{
+                            padding: '10px 12px',
+                            color: '#111827',
+                            fontWeight: 500,
+                            minWidth: '300px',
+                            width: '25%',
+                            wordBreak: 'break-word',
+                            position: 'sticky',
+                            left: 0,
+                            background: 'inherit',
+                            zIndex: 5
+                          }}>{product.name}</td>
+                          <td style={{
+                            padding: '10px 12px',
+                            color: '#374151',
+                            whiteSpace: 'nowrap'
+                          }}>{product.default_code || '-'}</td>
+                          <td style={{
+                            padding: '10px 12px',
+                            color: '#374151',
+                            whiteSpace: 'nowrap'
+                          }}>{product.pos_category}</td>
+                          <td style={{
+                            padding: '10px 12px',
+                            color: '#059669',
+                            fontWeight: 600,
+                            textAlign: 'right',
+                            whiteSpace: 'nowrap'
+                          }}>${product.list_price.toFixed(2)}</td>
+                          <td style={{
+                            padding: '10px 12px',
+                            color: '#dc2626',
+                            fontWeight: 600,
+                            textAlign: 'right',
+                            whiteSpace: 'nowrap'
+                          }}>${product.standard_price.toFixed(2)}</td>
+                          <td style={{
+                            padding: '10px 12px',
+                            color: '#0369a1',
+                            fontWeight: 600,
+                            textAlign: 'right',
+                            whiteSpace: 'nowrap'
+                          }}>{product.qty_available}</td>
+                          <td style={{
+                            padding: '10px 12px',
+                            color: (product.raytech_stock ?? 0) > 0 ? '#059669' : '#6b7280',
+                            fontWeight: 600,
+                            textAlign: 'right',
+                            whiteSpace: 'nowrap'
+                          }}>{product.raytech_stock ?? 0}</td>
+                          <td style={{
+                            padding: '10px 12px',
+                            textAlign: 'right',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedProductId(product.id);
+                                setShowSalesModal(true);
+                                loadSalesOrders(product.id);
+                              }}
+                              style={{
+                                color: '#667eea',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                                transition: 'all 0.2s ease'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.color = '#5568d3';
+                                e.currentTarget.style.textDecoration = 'none';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.color = '#667eea';
+                                e.currentTarget.style.textDecoration = 'underline';
+                              }}
+                            >
+                              {product.sales_quantity.toFixed(0)}
+                            </span>
+                          </td>
+                          <td style={{
+                            padding: '10px 12px',
+                            textAlign: 'right',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedProductId(product.id);
+                                setShowPurchaseModal(true);
+                                loadPurchaseOrders(product.id);
+                              }}
+                              style={{
+                                color: '#f59e0b',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                                transition: 'all 0.2s ease'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.color = '#d97706';
+                                e.currentTarget.style.textDecoration = 'none';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.color = '#f59e0b';
+                                e.currentTarget.style.textDecoration = 'underline';
+                              }}
+                            >
+                              {product.purchase_quantity.toFixed(0)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div style={{
+                textAlign: 'center',
+                padding: '60px 20px',
+                color: '#6b7280',
+                fontSize: '14px',
+                background: '#fff',
+                borderRadius: '12px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+              }}>
+                没有符合筛选条件的产品
+              </div>
+            )
+          ) : (
+            <div style={{ 
+              display: viewMode === 'grid' ? 'grid' : 'flex',
+              flexDirection: viewMode === 'grid' ? 'row' : 'column',
+              gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill, minmax(150px, 1fr))' : 'none',
+              gap: viewMode === 'grid' ? '16px' : '16px'
+            }}>
             {filteredProducts.length > 0 ? (
-              filteredProducts.map((product) => (
+                filteredProducts.map((product) => {
+                  // 详细模式
+                  if (viewMode === 'detailed') {
+                  return (
               <div
                 key={product.id}
                 className="product-card"
@@ -2301,10 +2945,6 @@ export default function ProductsPage() {
                       <div className="product-info-item">
                         <span style={{ color: '#6b7280' }}>SKU：</span>
                         <span style={{ color: '#374151', fontWeight: 500 }}>{product.default_code || '-'}</span>
-                      </div>
-                      <div className="product-info-item">
-                        <span style={{ color: '#6b7280' }}>条码：</span>
-                        <span style={{ color: '#374151', fontWeight: 500 }}>{product.barcode || '-'}</span>
                       </div>
                       <div className="product-info-item">
                         <span style={{ color: '#6b7280' }}>POS类别：</span>
@@ -2414,7 +3054,109 @@ export default function ProductsPage() {
                   </div>
                 </div>
               </div>
-            ))
+                  );
+                }
+                
+                
+                // 网格模式（小图标）
+                if (viewMode === 'grid') {
+                  return (
+                    <div
+                      key={product.id}
+                      onClick={() => {
+                        setSelectedProduct(product);
+                        setShowProductDetailModal(true);
+                      }}
+                      style={{
+                        background: '#fff',
+                        borderRadius: '8px',
+                        padding: '12px',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                        transition: 'all 0.2s ease',
+                        border: '1px solid #e5e7eb',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '8px'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.borderColor = '#667eea';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.borderColor = '#e5e7eb';
+                      }}
+                    >
+                      {product.image_128 ? (
+                        <div style={{
+                          width: '100%',
+                          aspectRatio: '1',
+                          borderRadius: '6px',
+                          overflow: 'hidden',
+                          background: '#f3f4f6',
+                          border: '1px solid #e5e7eb',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}>
+                          <img
+                            src={`data:image/png;base64,${product.image_128}`}
+                            alt={product.name}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'contain'
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div style={{
+                          width: '100%',
+                          aspectRatio: '1',
+                          borderRadius: '6px',
+                          background: '#f3f4f6',
+                          border: '1px solid #e5e7eb',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#9ca3af',
+                          fontSize: '24px'
+                        }}>
+                          📦
+                        </div>
+                      )}
+                      <div style={{
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        color: '#111827',
+                        textAlign: 'center',
+                        wordBreak: 'break-word',
+                        width: '100%',
+                        lineHeight: '1.4',
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden'
+                      }}>
+                        {product.name}
+                      </div>
+                      <div style={{
+                        fontSize: '11px',
+                        color: '#059669',
+                        fontWeight: 600
+                      }}>
+                        ${product.list_price.toFixed(2)}
+                      </div>
+                    </div>
+                  );
+                }
+                
+                return null;
+              })
             ) : (
               <div style={{
                 textAlign: 'center',
@@ -2429,6 +3171,7 @@ export default function ProductsPage() {
               </div>
             )}
           </div>
+          )
         )}
 
         {/* 空状态 */}
@@ -2885,6 +3628,251 @@ export default function ProductsPage() {
                   暂无采购订单记录
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 产品详情模态框（用于网格视图） */}
+      {showProductDetailModal && selectedProduct && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            padding: '20px'
+          }}
+          onClick={() => {
+            setShowProductDetailModal(false);
+            setSelectedProduct(null);
+          }}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: '12px',
+              padding: '24px',
+              maxWidth: '800px',
+              maxHeight: '90vh',
+              overflow: 'auto',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+              position: 'relative',
+              width: '100%'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '20px',
+              borderBottom: '1px solid #e5e7eb',
+              paddingBottom: '16px'
+            }}>
+              <h2 style={{
+                margin: 0,
+                fontSize: '20px',
+                fontWeight: 600,
+                color: '#111827'
+              }}>
+                产品详情
+              </h2>
+              <button
+                onClick={() => {
+                  setShowProductDetailModal(false);
+                  setSelectedProduct(null);
+                }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: '24px',
+                  color: '#6b7280',
+                  cursor: 'pointer',
+                  padding: '0',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '6px',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#f3f4f6';
+                  e.currentTarget.style.color = '#111827';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = '#6b7280';
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'auto 1fr',
+              gap: '24px',
+              alignItems: 'start'
+            }}>
+              {/* 产品图片 */}
+              {selectedProduct.image_128 && (
+                <div style={{
+                  width: '200px',
+                  height: '200px',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  background: '#f3f4f6',
+                  border: '1px solid #e5e7eb',
+                  cursor: 'pointer',
+                  flexShrink: 0
+                }}
+                onClick={() => handleImageClick(selectedProduct.image_128)}
+                >
+                  <img
+                    src={`data:image/png;base64,${selectedProduct.image_128}`}
+                    alt={selectedProduct.name}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'contain'
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* 产品信息 */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: '18px',
+                  fontWeight: 600,
+                  color: '#111827',
+                  marginBottom: '16px',
+                  wordBreak: 'break-word'
+                }}>
+                  {selectedProduct.name}
+                </div>
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                  gap: '12px',
+                  fontSize: '14px'
+                }}>
+                  <div>
+                    <span style={{ color: '#6b7280' }}>SKU：</span>
+                    <span style={{ color: '#374151', fontWeight: 500 }}>{selectedProduct.default_code || '-'}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: '#6b7280' }}>POS类别：</span>
+                    <span style={{ color: '#374151', fontWeight: 500 }}>{selectedProduct.pos_category}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: '#6b7280' }}>售价：</span>
+                    <span style={{ color: '#059669', fontWeight: 600 }}>
+                      ${selectedProduct.list_price.toFixed(2)}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{ color: '#6b7280' }}>成本：</span>
+                    <span style={{ color: '#dc2626', fontWeight: 600 }}>
+                      ${selectedProduct.standard_price.toFixed(2)}
+                    </span>
+                  </div>
+                  {selectedProduct.raytech_p3 !== null && (
+                    <div>
+                      <span style={{ color: '#6b7280' }}>总部零售价：</span>
+                      <span style={{ color: '#059669', fontWeight: 600 }}>
+                        ${selectedProduct.raytech_p3.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                  <div>
+                    <span style={{ color: '#6b7280' }}>当前库存：</span>
+                    <span style={{ color: '#0369a1', fontWeight: 600, fontSize: '16px' }}>
+                      {selectedProduct.qty_available}
+                    </span>
+                    {selectedProduct.free_qty > 0 && (
+                      <span style={{ marginLeft: 8, color: '#6b7280', fontSize: '12px' }}>
+                        (可用: {selectedProduct.free_qty})
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <span style={{ color: '#6b7280' }}>总部库存：</span>
+                    <span style={{
+                      color: (selectedProduct.raytech_stock ?? 0) > 0 ? '#059669' : '#6b7280',
+                      fontWeight: 600
+                    }}>
+                      {selectedProduct.raytech_stock ?? 0}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{ color: '#6b7280' }}>销售数量：</span>
+                    <span 
+                      onClick={() => {
+                        setSelectedProductId(selectedProduct.id);
+                        setShowSalesModal(true);
+                        setShowProductDetailModal(false);
+                        loadSalesOrders(selectedProduct.id);
+                      }}
+                      style={{ 
+                        color: '#667eea', 
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = '#5568d3';
+                        e.currentTarget.style.textDecoration = 'none';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = '#667eea';
+                        e.currentTarget.style.textDecoration = 'underline';
+                      }}
+                    >
+                      {selectedProduct.sales_quantity.toFixed(0)}
+                    </span>
+                  </div>
+                  <div>
+                    <span style={{ color: '#6b7280' }}>采购数量：</span>
+                    <span 
+                      onClick={() => {
+                        setSelectedProductId(selectedProduct.id);
+                        setShowPurchaseModal(true);
+                        setShowProductDetailModal(false);
+                        loadPurchaseOrders(selectedProduct.id);
+                      }}
+                      style={{ 
+                        color: '#f59e0b', 
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = '#d97706';
+                        e.currentTarget.style.textDecoration = 'none';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = '#f59e0b';
+                        e.currentTarget.style.textDecoration = 'underline';
+                      }}
+                    >
+                      {selectedProduct.purchase_quantity.toFixed(0)}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

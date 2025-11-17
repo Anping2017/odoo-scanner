@@ -28,15 +28,20 @@ export default function CompanyPicker({ show = false, required = false, initialI
   return (
     <>
       <style>{`
+        @media (max-width: 768px) {
+          .company-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+        }
         @media (max-width: 480px) {
           .company-grid {
             grid-template-columns: 1fr !important;
           }
           .company-item {
-            padding: 14px 16px !important;
+            padding: 10px 12px !important;
           }
           .company-picker-wrapper {
-            padding: 16px !important;
+            padding: 12px !important;
           }
         }
         @media (max-height: 700px) {
@@ -47,12 +52,12 @@ export default function CompanyPicker({ show = false, required = false, initialI
       `}</style>
       <div className="company-picker-wrapper" style={{
         border: `2px solid ${touched && required && !val ? '#dc2626' : '#e5e7eb'}`,
-        padding: '20px',
+        padding: '16px',
         borderRadius: '12px',
         marginTop: '4px',
         background: '#f9fafb',
         transition: 'all 0.2s ease',
-        minHeight: '120px',
+        minHeight: 'auto',
       }}>
         <div style={{
           fontSize: '11px',
@@ -66,8 +71,8 @@ export default function CompanyPicker({ show = false, required = false, initialI
         </div>
         <div className="company-grid" style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(2, 1fr)',
-          gap: '12px',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gap: '8px',
         }}>
         {companies.map((company) => (
           <label
@@ -76,8 +81,8 @@ export default function CompanyPicker({ show = false, required = false, initialI
             style={{
               display: 'flex',
               alignItems: 'center',
-              padding: '12px 16px',
-              borderRadius: '10px',
+              padding: '8px 10px',
+              borderRadius: '8px',
               border: `2px solid ${val === String(company.id) ? '#667eea' : '#e5e7eb'}`,
               background: val === String(company.id) ? '#f0f4ff' : '#fff',
               cursor: 'pointer',
@@ -108,23 +113,25 @@ export default function CompanyPicker({ show = false, required = false, initialI
               }}
               onBlur={() => setTouched(true)}
               style={{
-                marginRight: '10px',
-                width: '18px',
-                height: '18px',
+                marginRight: '6px',
+                width: '14px',
+                height: '14px',
                 cursor: 'pointer',
                 accentColor: '#667eea',
+                flexShrink: 0,
               }}
             />
-            <div>
-              <div style={{
-                fontWeight: '400',
-                fontSize: '13px',
-                fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-                color: '#111827',
-                letterSpacing: '0.1px',
-              }}>
-                {company.id}: {company.name}
-              </div>
+            <div style={{
+              fontWeight: '400',
+              fontSize: '11px',
+              fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+              color: '#111827',
+              letterSpacing: '0.1px',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}>
+              {company.id}: {company.name}
             </div>
           </label>
         ))}

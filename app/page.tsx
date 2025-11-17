@@ -128,7 +128,7 @@ export default function LoginPage() {
         }
         @media (min-width: 769px) {
           form {
-            max-width: 520px !important;
+            max-width: 800px !important;
             padding: 48px 40px !important;
           }
         }
@@ -163,7 +163,7 @@ export default function LoginPage() {
         onSubmit={handleSubmit}
         style={{
           width: '100%',
-          maxWidth: '520px',
+          maxWidth: '800px',
           maxHeight: '90vh',
           borderRadius: '24px',
           padding: '40px 32px',
@@ -177,40 +177,40 @@ export default function LoginPage() {
         }}
       >
         {/* Logo/标题区域 */}
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
           <div style={{
-            width: '64px',
-            height: '64px',
-            margin: '0 auto 16px',
-            borderRadius: '16px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '28px',
-            fontWeight: 'bold',
-            color: '#fff',
-            boxShadow: '0 8px 16px rgba(102, 126, 234, 0.3)',
+            gap: '12px',
+            marginBottom: '0px',
           }}>
-            O
+            <div style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '16px',
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '28px',
+              fontWeight: 'bold',
+              color: '#fff',
+              boxShadow: '0 8px 16px rgba(102, 126, 234, 0.3)',
+              flexShrink: 0,
+            }}>
+              O
+            </div>
+            <h1 style={{
+              fontSize: '28px',
+              fontWeight: '700',
+              margin: 0,
+              color: '#111827',
+              letterSpacing: '-0.5px',
+            }}>
+              欢迎回来
+            </h1>
           </div>
-          <h1 style={{
-            fontSize: '28px',
-            fontWeight: '700',
-            margin: 0,
-            color: '#111827',
-            letterSpacing: '-0.5px',
-          }}>
-            欢迎回来
-          </h1>
-          <p style={{
-            fontSize: '14px',
-            color: '#6b7280',
-            marginTop: '8px',
-            marginBottom: 0,
-          }}>
-            登录您的 Odoo 账户
-          </p>
         </div>
 
         {/* 域名选择框 */}
