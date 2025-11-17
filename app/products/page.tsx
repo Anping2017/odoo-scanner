@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { saveOfflineProducts, loadOfflineProducts, clearOfflineProducts } from '@/lib/indexedDB';
 
 type Product = {
   id: number;
@@ -53,6 +54,9 @@ export default function ProductsPage() {
   const [enableResultSearch, setEnableResultSearch] = useState<boolean>(false); // 启用"在结果中搜索"
   const [resultSearchInclude, setResultSearchInclude] = useState<string>(''); // 从结果中搜索（包含）
   const [resultSearchExclude, setResultSearchExclude] = useState<string>(''); // 从结果中排除（排除）
+  const [offlineMode, setOfflineMode] = useState<boolean>(false); // 离线模式
+  const [offlineData, setOfflineData] = useState<Product[]>([]); // 离线数据
+  const [downloadingOfflineData, setDownloadingOfflineData] = useState<boolean>(false); // 正在下载离线数据
 
   // 防抖搜索
   useEffect(() => {
@@ -325,19 +329,154 @@ export default function ProductsPage() {
     setTotalPages(totalPages);
   }, [cachedProducts, filterStoreStock, filterHeadquartersStock, quickFilter, enableResultSearch, resultSearchInclude, resultSearchExclude, sortField, sortOrder, currentPage, pageSize]);
 
-  // 当搜索词变化时，从API加载（只在有搜索条件时）
+  // 从IndexedDB加载离线数据
   useEffect(() => {
-    // 只有当有搜索条件时才加载
-    if (apiSearchTerm.trim() || selectedPosCategories.length > 0 || minPrice || maxPrice) {
-      loadSearchResults();
-    } else {
-      // 如果没有搜索条件，清空缓存和产品列表
+    if (typeof window !== 'undefined') {
+      loadOfflineProducts().then((data) => {
+        if (data && data.products && data.products.length > 0) {
+          setOfflineData(data.products);
+          setOfflineMode(true); // 如果有离线数据，自动启用离线模式
+          if (data.timestamp) {
+            const age = Date.now() - data.timestamp;
+            const oneDay = 24 * 60 * 60 * 1000;
+            // 如果数据超过1天，提示用户更新
+            if (age > oneDay) {
+              console.warn('离线数据已超过1天，建议更新');
+            }
+          }
+        }
+      }).catch((e) => {
+        console.error('加载离线数据失败:', e);
+      });
+    }
+  }, []);
+
+  // 下载所有产品数据到本地
+  const downloadOfflineData = useCallback(async () => {
+    setDownloadingOfflineData(true);
+    setError(null);
+    try {
+      // 获取所有产品数据（不进行筛选）
+      const params = new URLSearchParams();
+      params.append('search_only', 'true');
+      params.append('page_size', '50000'); // 获取尽可能多的数据
+
+      const res = await fetch(`/api/products?${params.toString()}`, { 
+        cache: 'no-store'
+      });
+      
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+
+      const data = await res.json();
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      const allProducts = Array.isArray(data.products) ? data.products : [];
+      
+      // 保存到IndexedDB（支持更大的数据量）
+      if (typeof window !== 'undefined') {
+        try {
+          await saveOfflineProducts(allProducts);
+          setOfflineData(allProducts);
+          setOfflineMode(true);
+          alert(`成功下载 ${allProducts.length} 个产品数据到本地！`);
+        } catch (saveError: any) {
+          throw new Error(`保存数据失败: ${saveError?.message || '未知错误'}`);
+        }
+      }
+    } catch (e: any) {
+      const errorMessage = e?.message || '下载离线数据失败';
+      setError(errorMessage);
+      alert(`下载失败: ${errorMessage}`);
+    } finally {
+      setDownloadingOfflineData(false);
+    }
+  }, []);
+
+  // 在离线模式下进行本地搜索
+  const searchOfflineData = useCallback(() => {
+    if (!offlineMode || offlineData.length === 0) {
       setCachedProducts([]);
       setProducts([]);
       setTotalCount(0);
       setTotalPages(1);
+      return;
     }
-  }, [apiSearchTerm, searchMode, selectedPosCategories, minPrice, maxPrice, loadSearchResults]);
+
+    setLoading(false); // 离线模式不需要loading状态
+    let filtered = [...offlineData];
+
+    // 应用搜索条件（如果没有搜索条件，显示所有产品）
+    if (apiSearchTerm.trim()) {
+      const searchTerm = apiSearchTerm.trim().toLowerCase();
+      const keywords = searchTerm.split(/\s+/).filter(k => k.length > 0);
+      
+      filtered = filtered.filter(p => {
+        const nameLower = p.name.toLowerCase();
+        const skuLower = (p.default_code || '').toLowerCase();
+        const barcodeLower = (p.barcode || '').toLowerCase();
+        
+        if (searchMode === 'exact') {
+          // 精确搜索
+          return nameLower === searchTerm || skuLower === searchTerm || barcodeLower === searchTerm;
+        } else if (searchMode === 'name') {
+          // 按名称搜索
+          return keywords.every(k => nameLower.includes(k));
+        } else if (searchMode === 'sku') {
+          // 按SKU搜索
+          return keywords.every(k => skuLower.includes(k));
+        } else {
+          // 模糊搜索
+          return keywords.every(k => 
+            nameLower.includes(k) || 
+            skuLower.includes(k) || 
+            barcodeLower.includes(k)
+          );
+        }
+      });
+    }
+
+    // 应用POS类别筛选
+    if (selectedPosCategories.length > 0) {
+      filtered = filtered.filter(p => 
+        selectedPosCategories.includes(p.pos_category)
+      );
+    }
+
+    // 应用价格筛选
+    if (minPrice && !isNaN(parseFloat(minPrice))) {
+      filtered = filtered.filter(p => p.list_price >= parseFloat(minPrice));
+    }
+    if (maxPrice && !isNaN(parseFloat(maxPrice))) {
+      filtered = filtered.filter(p => p.list_price <= parseFloat(maxPrice));
+    }
+
+    // 设置缓存产品（用于后续筛选）
+    setCachedProducts(filtered);
+  }, [offlineMode, offlineData, apiSearchTerm, searchMode, selectedPosCategories, minPrice, maxPrice]);
+
+  // 当搜索词变化时，从API加载（只在有搜索条件时）
+  useEffect(() => {
+    if (offlineMode && offlineData.length > 0) {
+      // 离线模式：使用本地数据搜索（即使没有搜索条件也显示所有产品）
+      searchOfflineData();
+    } else {
+      // 在线模式：从API加载
+      if (apiSearchTerm.trim() || selectedPosCategories.length > 0 || minPrice || maxPrice) {
+        loadSearchResults();
+      } else {
+        // 如果没有搜索条件，清空缓存和产品列表
+        setCachedProducts([]);
+        setProducts([]);
+        setTotalCount(0);
+        setTotalPages(1);
+      }
+    }
+  }, [offlineMode, offlineData, apiSearchTerm, searchMode, selectedPosCategories, minPrice, maxPrice, loadSearchResults, searchOfflineData]);
 
   // 当筛选、排序、分页变化时，在客户端处理
   useEffect(() => {
@@ -367,6 +506,20 @@ export default function ProductsPage() {
     } finally {
       setOrdersLoading(false);
     }
+  }, []);
+
+  // 清除所有筛选条件
+  const clearAllFilters = useCallback(() => {
+    setFilterStoreStock(null);
+    setFilterHeadquartersStock(null);
+    setSelectedPosCategories([]);
+    setMinPrice('');
+    setMaxPrice('');
+    setQuickFilter(null);
+    setEnableResultSearch(false);
+    setResultSearchInclude('');
+    setResultSearchExclude('');
+    setCurrentPage(1);
   }, []);
 
   // 加载采购订单
@@ -836,6 +989,110 @@ export default function ProductsPage() {
               产品查询
             </h1>
           </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {offlineMode && (
+              <div style={{
+                padding: '6px 12px',
+                background: '#d1fae5',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: 500,
+                color: '#059669',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                <span>📱</span>
+                <span>离线模式</span>
+                {offlineData.length > 0 && (
+                  <span style={{ fontSize: '11px', opacity: 0.8 }}>
+                    ({offlineData.length} 个产品)
+                  </span>
+                )}
+              </div>
+            )}
+            <button
+              onClick={downloadOfflineData}
+              disabled={downloadingOfflineData}
+              style={{
+                padding: '8px 16px',
+                background: downloadingOfflineData 
+                  ? '#d1d5db' 
+                  : offlineMode 
+                    ? '#f3f4f6' 
+                    : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                borderRadius: '8px',
+                border: 'none',
+                color: downloadingOfflineData 
+                  ? '#9ca3af' 
+                  : offlineMode 
+                    ? '#374151' 
+                    : '#fff',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: downloadingOfflineData ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                whiteSpace: 'nowrap',
+                boxShadow: !downloadingOfflineData && !offlineMode ? '0 2px 8px rgba(102, 126, 234, 0.3)' : 'none'
+              }}
+              onMouseEnter={(e) => {
+                if (!downloadingOfflineData && !offlineMode) {
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!downloadingOfflineData && !offlineMode) {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.3)';
+                }
+              }}
+            >
+              {downloadingOfflineData ? (
+                <>⏳ 下载中...</>
+              ) : offlineMode ? (
+                <>🔄 更新离线数据</>
+              ) : (
+                <>💾 下载离线数据</>
+              )}
+            </button>
+            {offlineMode && (
+              <button
+                onClick={() => {
+                  setOfflineMode(false);
+                  setCachedProducts([]);
+                  setProducts([]);
+                  setTotalCount(0);
+                  setTotalPages(1);
+                }}
+                style={{
+                  padding: '8px 16px',
+                  background: '#fff',
+                  borderRadius: '8px',
+                  border: '1px solid #d1d5db',
+                  color: '#374151',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  whiteSpace: 'nowrap'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#f3f4f6';
+                  e.currentTarget.style.borderColor = '#9ca3af';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#fff';
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                }}
+              >
+                🌐 切换在线模式
+              </button>
+            )}
+          </div>
         </div>
 
         {/* 搜索栏 */}
@@ -1290,32 +1547,66 @@ export default function ProductsPage() {
                 </span>
               )}
             </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowFilters(!showFilters);
-              }}
-              style={{
-                padding: '4px 8px',
-                borderRadius: '6px',
-                border: '1px solid #e5e7eb',
-                background: 'transparent',
-                color: '#6b7280',
-                fontSize: '12px',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#f3f4f6';
-                e.currentTarget.style.borderColor = '#d1d5db';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-                e.currentTarget.style.borderColor = '#e5e7eb';
-              }}
-            >
-              {showFilters ? '收起' : '展开'}
-            </button>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {(filterStoreStock !== null || filterHeadquartersStock !== null || selectedPosCategories.length > 0 || minPrice || maxPrice || quickFilter !== null || (enableResultSearch && (resultSearchInclude.trim() || resultSearchExclude.trim()))) && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    clearAllFilters();
+                  }}
+                  style={{
+                    padding: '4px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #dc2626',
+                    background: '#fee2e2',
+                    color: '#dc2626',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    whiteSpace: 'nowrap'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#fecaca';
+                    e.currentTarget.style.borderColor = '#b91c1c';
+                    e.currentTarget.style.color = '#b91c1c';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#fee2e2';
+                    e.currentTarget.style.borderColor = '#dc2626';
+                    e.currentTarget.style.color = '#dc2626';
+                  }}
+                >
+                  🗑️ 清除筛选
+                </button>
+              )}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowFilters(!showFilters);
+                }}
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                  border: '1px solid #e5e7eb',
+                  background: 'transparent',
+                  color: '#6b7280',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#f3f4f6';
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.borderColor = '#e5e7eb';
+                }}
+              >
+                {showFilters ? '收起' : '展开'}
+              </button>
+            </div>
           </div>
           
           {/* 筛选内容 */}

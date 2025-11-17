@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- 背景圆形 -->
+  <circle cx="50" cy="50" r="45" fill="#667eea" stroke="#5568d3" stroke-width="2"/>
+  
+  <!-- 扫描框 -->
+  <rect x="25" y="25" width="50" height="50" fill="none" stroke="#fff" stroke-width="3" rx="4"/>
+  
+  <!-- 扫描线 -->
+  <line x1="30" y1="40" x2="70" y2="40" stroke="#fff" stroke-width="2" opacity="0.8"/>
+  <line x1="30" y1="50" x2="70" y2="50" stroke="#fff" stroke-width="2" opacity="0.6"/>
+  <line x1="30" y1="60" x2="70" y2="60" stroke="#fff" stroke-width="2" opacity="0.8"/>
+  
+  <!-- 四个角的装饰 -->
+  <path d="M 25 25 L 35 25 L 35 30 L 30 30 Z" fill="#fff"/>
+  <path d="M 75 25 L 75 30 L 70 30 L 70 25 Z" fill="#fff"/>
+  <path d="M 25 75 L 30 75 L 30 70 L 25 70 Z" fill="#fff"/>
+  <path d="M 75 75 L 70 75 L 70 70 L 75 70 Z" fill="#fff"/>
+</svg>
+
