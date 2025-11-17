@@ -50,6 +50,9 @@ export default function ProductsPage() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc'); // 排序方向
   const [showFilters, setShowFilters] = useState<boolean>(true); // 显示/隐藏筛选器
   const [showSort, setShowSort] = useState<boolean>(true); // 显示/隐藏排序器
+  const [enableResultSearch, setEnableResultSearch] = useState<boolean>(false); // 启用"在结果中搜索"
+  const [resultSearchInclude, setResultSearchInclude] = useState<string>(''); // 从结果中搜索（包含）
+  const [resultSearchExclude, setResultSearchExclude] = useState<string>(''); // 从结果中排除（排除）
 
   // 防抖搜索
   useEffect(() => {
@@ -64,7 +67,7 @@ export default function ProductsPage() {
   // 筛选条件变化时重置到第一页
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterStoreStock, filterHeadquartersStock, selectedPosCategories, minPrice, maxPrice, quickFilter, searchMode, sortField, sortOrder]);
+  }, [filterStoreStock, filterHeadquartersStock, selectedPosCategories, minPrice, maxPrice, quickFilter, searchMode, sortField, sortOrder, resultSearchInclude, resultSearchExclude]);
 
   // 当搜索词变化时，重置缓存和分页
   useEffect(() => {
@@ -73,6 +76,14 @@ export default function ProductsPage() {
       setCurrentPage(1);
     }
   }, [apiSearchTerm, searchTerm]);
+
+  // 当API搜索词变化时，重置"在结果中搜索"（包括防抖后的搜索词）
+  useEffect(() => {
+    // 当API搜索词变化时，重置"在结果中搜索"
+    setEnableResultSearch(false);
+    setResultSearchInclude('');
+    setResultSearchExclude('');
+  }, [apiSearchTerm]);
 
   // 从API加载搜索结果（只传递搜索相关参数，不进行筛选、排序、分页）
   const loadSearchResults = useCallback(async () => {
@@ -225,6 +236,43 @@ export default function ProductsPage() {
       }
     }
 
+    // 应用"在结果中搜索"筛选
+    if (enableResultSearch) {
+      // 从结果中搜索（包含）：产品名称、SKU或条码中包含关键词
+      if (resultSearchInclude.trim()) {
+        const includeKeywords = resultSearchInclude.trim().toLowerCase().split(/\s+/).filter(k => k.length > 0);
+        filtered = filtered.filter(p => {
+          const nameLower = p.name.toLowerCase();
+          const skuLower = (p.default_code || '').toLowerCase();
+          const barcodeLower = (p.barcode || '').toLowerCase();
+          
+          // 所有关键词都要在名称、SKU或条码中出现（不要求顺序和连续）
+          return includeKeywords.every(keyword => 
+            nameLower.includes(keyword) || 
+            skuLower.includes(keyword) || 
+            barcodeLower.includes(keyword)
+          );
+        });
+      }
+      
+      // 从结果中排除：产品名称、SKU或条码中不包含关键词
+      if (resultSearchExclude.trim()) {
+        const excludeKeywords = resultSearchExclude.trim().toLowerCase().split(/\s+/).filter(k => k.length > 0);
+        filtered = filtered.filter(p => {
+          const nameLower = p.name.toLowerCase();
+          const skuLower = (p.default_code || '').toLowerCase();
+          const barcodeLower = (p.barcode || '').toLowerCase();
+          
+          // 排除包含任何排除关键词的产品
+          return !excludeKeywords.some(keyword => 
+            nameLower.includes(keyword) || 
+            skuLower.includes(keyword) || 
+            barcodeLower.includes(keyword)
+          );
+        });
+      }
+    }
+
     // 应用排序
     filtered.sort((a, b) => {
       let aValue: any;
@@ -275,7 +323,7 @@ export default function ProductsPage() {
     setProducts(paginated);
     setTotalCount(total);
     setTotalPages(totalPages);
-  }, [cachedProducts, filterStoreStock, filterHeadquartersStock, quickFilter, sortField, sortOrder, currentPage, pageSize]);
+  }, [cachedProducts, filterStoreStock, filterHeadquartersStock, quickFilter, enableResultSearch, resultSearchInclude, resultSearchExclude, sortField, sortOrder, currentPage, pageSize]);
 
   // 当搜索词变化时，从API加载（只在有搜索条件时）
   useEffect(() => {
@@ -1054,6 +1102,134 @@ export default function ProductsPage() {
               )}
             </div>
           </div>
+
+          {/* 在结果中搜索 - 只在有搜索结果时显示 */}
+          {cachedProducts.length > 0 && (
+          <div style={{
+            width: '100%',
+            marginTop: '16px',
+            padding: '16px',
+            background: enableResultSearch ? '#f0f4ff' : '#f9fafb',
+            borderRadius: '12px',
+            border: enableResultSearch ? '2px solid #667eea' : '1px solid #e5e7eb',
+            transition: 'all 0.3s ease'
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              marginBottom: enableResultSearch ? '16px' : '0',
+              cursor: 'pointer'
+            }}
+            onClick={() => setEnableResultSearch(!enableResultSearch)}
+            >
+              <input
+                type="checkbox"
+                checked={enableResultSearch}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  setEnableResultSearch(e.target.checked);
+                }}
+                style={{
+                  width: '18px',
+                  height: '18px',
+                  cursor: 'pointer',
+                  accentColor: '#667eea'
+                }}
+              />
+              <label style={{
+                fontSize: '14px',
+                fontWeight: 600,
+                color: enableResultSearch ? '#667eea' : '#374151',
+                cursor: 'pointer',
+                userSelect: 'none'
+              }}>
+                🔎 在结果中搜索
+              </label>
+            </div>
+            
+            {enableResultSearch && (
+              <div style={{
+                display: 'flex',
+                gap: '12px',
+                flexWrap: 'wrap',
+                alignItems: 'center'
+              }}>
+                <div style={{ flex: 1, minWidth: '200px' }}>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    color: '#6b7280',
+                    marginBottom: '6px'
+                  }}>
+                    从结果中搜索（包含）：
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="输入关键词，支持多关键词（空格分隔）"
+                    value={resultSearchInclude}
+                    onChange={(e) => setResultSearchInclude(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      border: '1px solid #d1d5db',
+                      outline: 'none',
+                      fontSize: '14px',
+                      background: '#fff',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = '#667eea';
+                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = '#d1d5db';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  />
+                </div>
+                
+                <div style={{ flex: 1, minWidth: '200px' }}>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    color: '#6b7280',
+                    marginBottom: '6px'
+                  }}>
+                    从结果中排除：
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="输入关键词，支持多关键词（空格分隔）"
+                    value={resultSearchExclude}
+                    onChange={(e) => setResultSearchExclude(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '8px',
+                      border: '1px solid #d1d5db',
+                      outline: 'none',
+                      fontSize: '14px',
+                      background: '#fff',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = '#667eea';
+                      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = '#d1d5db';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+          )}
         </div>
 
         {/* 筛选栏 */}
@@ -1093,7 +1269,7 @@ export default function ProductsPage() {
                 fontSize: '12px'
               }}>▼</span>
               <span>筛选条件</span>
-              {(filterStoreStock !== null || filterHeadquartersStock !== null || selectedPosCategories.length > 0 || minPrice || maxPrice || quickFilter !== null) && (
+              {(filterStoreStock !== null || filterHeadquartersStock !== null || selectedPosCategories.length > 0 || minPrice || maxPrice || quickFilter !== null || (enableResultSearch && (resultSearchInclude.trim() || resultSearchExclude.trim()))) && (
                 <span style={{
                   fontSize: '11px',
                   padding: '2px 6px',
@@ -1108,7 +1284,8 @@ export default function ProductsPage() {
                     selectedPosCategories.length,
                     minPrice ? 1 : 0,
                     maxPrice ? 1 : 0,
-                    quickFilter !== null ? 1 : 0
+                    quickFilter !== null ? 1 : 0,
+                    (enableResultSearch && (resultSearchInclude.trim() || resultSearchExclude.trim())) ? 1 : 0
                   ].reduce((a, b) => a + b, 0)}
                 </span>
               )}
