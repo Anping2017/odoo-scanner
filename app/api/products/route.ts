@@ -63,9 +63,14 @@ export async function GET(req: NextRequest) {
         searchDomain.push(['default_code', 'ilike', searchTerm]);
       } else {
         // 模糊搜索模式：智能多关键词搜索
-        // 1. 支持引号包裹的精确短语
+        // 1. 支持引号包裹的精确短语（支持中英文引号）
         // 2. 多关键词自动用AND连接（每个关键词都要出现）
         // 3. 关键词顺序不重要，大小写不敏感
+        
+        // 辅助函数：检查字符是否是引号（支持中英文引号）
+        const isQuote = (char: string) => {
+          return char === '"' || char === '"' || char === '"';
+        };
         
         // 解析搜索词：分离引号短语和普通关键词
         const parts: Array<{type: 'exact' | 'fuzzy', value: string}> = [];
@@ -74,7 +79,7 @@ export async function GET(req: NextRequest) {
         
         for (let i = 0; i < searchTerm.length; i++) {
           const char = searchTerm[i];
-          if (char === '"') {
+          if (isQuote(char)) {
             if (inQuotes) {
               // 结束引号
               if (currentPart.trim()) {
@@ -322,7 +327,7 @@ export async function GET(req: NextRequest) {
           ]
         ],
         kwargs: {
-          limit: parseInt(pageSize.toString()) || 5000, // 使用传入的page_size，默认5000
+          limit: Math.min(parseInt(pageSize.toString()) || 2000, 2000), // 优化：限制最大2000条，提升响应速度
           offset: 0,
           order: 'name asc', // 简单排序，客户端会重新排序
           context: ctx
@@ -345,15 +350,19 @@ export async function GET(req: NextRequest) {
       const productIds = products.map((p: any) => p.id).filter(Boolean);
 
       // 如果有多公司环境，先获取属于当前公司的订单ID（用于过滤销售数量）
+      // 优化：在search_only模式下跳过订单ID查询，因为销售数量查询可能很慢
       let companyOrderIds: number[] = [];
-      if (companyId) {
+      // 在search_only模式下，跳过订单ID和销售/采购数量查询以提升性能
+      const skipSalesPurchaseData = true; // search_only模式下跳过这些慢查询
+      
+      if (!skipSalesPurchaseData && companyId) {
         try {
           const orderIdsResult = await rpc('/web/dataset/call_kw', {
             model: 'pos.order',
             method: 'search',
             args: [[['company_id', '=', companyId]]],
             kwargs: { 
-              limit: 50000, // 限制最大订单数，避免性能问题
+              limit: 10000, // 优化：减少limit，提升响应速度
               context: ctx 
             }
           }, sessionId, base).catch(() => []);
@@ -367,6 +376,7 @@ export async function GET(req: NextRequest) {
       }
 
       // 并行获取辅助数据（自定义字段、POS类别、销售数量、采购数量）
+      // 优化：在search_only模式下跳过销售和采购数量查询
       const [
         customFieldsResult,
         posCategoryResult,
@@ -429,7 +439,8 @@ export async function GET(req: NextRequest) {
           }
         })(),
         // 销售数量查询（带公司过滤，确保与销售订单记录一致）
-        (async () => {
+        // 优化：在search_only模式下跳过，提升响应速度
+        skipSalesPurchaseData ? Promise.resolve([]) : (async () => {
           if (productIds.length === 0) return [];
           try {
             // 构建查询条件：产品ID + 公司过滤（如果有多公司环境）
@@ -456,7 +467,7 @@ export async function GET(req: NextRequest) {
             return [];
           }
         })(),
-        productIds.length > 0 ? rpc('/web/dataset/call_kw', {
+        skipSalesPurchaseData ? Promise.resolve([]) : (productIds.length > 0 ? rpc('/web/dataset/call_kw', {
           model: 'purchase.order.line',
           method: 'read_group',
           args: [
@@ -465,7 +476,7 @@ export async function GET(req: NextRequest) {
             ['product_id'],
           ],
           kwargs: { context: ctx }
-        }, sessionId, base).catch(() => []) : Promise.resolve([])
+        }, sessionId, base).catch(() => []) : Promise.resolve([]))
       ]);
 
       // 处理结果并组合数据
@@ -584,8 +595,8 @@ export async function GET(req: NextRequest) {
         ]
       ],
       kwargs: {
-        // 为了全产品排序，先获取所有数据（限制10000以避免性能问题）
-        limit: 10000,
+        // 为了全产品排序，先获取所有数据（优化：限制5000以提升响应速度）
+        limit: 5000,
         offset: 0,
         order: (() => {
           // 对于Odoo直接支持的字段，在Odoo层面排序
@@ -633,7 +644,7 @@ export async function GET(req: NextRequest) {
           method: 'search',
           args: [[['company_id', '=', companyId]]],
           kwargs: { 
-            limit: 50000, // 限制最大订单数，避免性能问题
+            limit: 10000, // 优化：减少limit，提升响应速度
             context: ctx 
           }
         }, sessionId, base).catch(() => []);
@@ -893,14 +904,18 @@ export async function GET(req: NextRequest) {
     // 如果获取的产品数量少于总数，说明达到了limit限制，使用实际获取的数量
     let finalTotal = productsList.length < totalCount ? productsList.length : totalCount;
 
-     // 8.4. 精确搜索模式下的结果过滤（确保完全匹配，不区分大小写）
+     // 8.4. 精确搜索模式下的结果过滤（确保包含匹配，不区分大小写）
      // 注意：过滤应该在排序和分页之前进行
      if (searchMode === 'exact' && search.trim()) {
        const exactTerm = search.trim().toLowerCase();
        productsList = productsList.filter((p: any) => {
-         const nameMatch = p.name?.toLowerCase() === exactTerm;
-         const codeMatch = p.default_code?.toLowerCase() === exactTerm;
-         const barcodeMatch = p.barcode?.toLowerCase() === exactTerm;
+         const nameLower = p.name?.toLowerCase() || '';
+         const codeLower = p.default_code?.toLowerCase() || '';
+         const barcodeLower = p.barcode?.toLowerCase() || '';
+         // 精确搜索：搜索词必须作为完整子字符串出现在名称、SKU或条码中
+         const nameMatch = nameLower.includes(exactTerm);
+         const codeMatch = codeLower.includes(exactTerm);
+         const barcodeMatch = barcodeLower.includes(exactTerm);
          return nameMatch || codeMatch || barcodeMatch;
        });
        // 更新总数
@@ -910,9 +925,14 @@ export async function GET(req: NextRequest) {
      // 8.4.1. 按名称搜索模式：已经在Odoo层面完成，无需额外过滤
      // 因为只搜索name字段，所以结果已经是按名称匹配的
 
-    // 8.4.2. 模糊搜索模式下的引号短语过滤（确保精确短语完全匹配）
+    // 8.4.2. 模糊搜索模式下的引号短语过滤（确保精确短语包含匹配，不区分大小写）
     if (searchMode === 'fuzzy' && search.trim()) {
       const searchTerm = search.trim();
+      // 辅助函数：检查字符是否是引号（支持中英文引号）
+      const isQuote = (char: string) => {
+        return char === '"' || char === '"' || char === '"';
+      };
+      
       const exactPhrases: string[] = [];
       let currentPart = '';
       let inQuotes = false;
@@ -920,7 +940,7 @@ export async function GET(req: NextRequest) {
       // 提取所有引号包裹的精确短语
       for (let i = 0; i < searchTerm.length; i++) {
         const char = searchTerm[i];
-        if (char === '"') {
+        if (isQuote(char)) {
           if (inQuotes) {
             if (currentPart.trim()) {
               exactPhrases.push(currentPart.trim().toLowerCase());
@@ -940,9 +960,13 @@ export async function GET(req: NextRequest) {
       if (exactPhrases.length > 0) {
         productsList = productsList.filter((p: any) => {
           return exactPhrases.every(phrase => {
-            const nameMatch = p.name?.toLowerCase() === phrase;
-            const codeMatch = p.default_code?.toLowerCase() === phrase;
-            const barcodeMatch = p.barcode?.toLowerCase() === phrase;
+            const nameLower = p.name?.toLowerCase() || '';
+            const codeLower = p.default_code?.toLowerCase() || '';
+            const barcodeLower = p.barcode?.toLowerCase() || '';
+            // 引号短语：必须作为完整子字符串出现在名称、SKU或条码中
+            const nameMatch = nameLower.includes(phrase);
+            const codeMatch = codeLower.includes(phrase);
+            const barcodeMatch = barcodeLower.includes(phrase);
             return nameMatch || codeMatch || barcodeMatch;
           });
         });
@@ -1023,7 +1047,7 @@ export async function GET(req: NextRequest) {
               method: 'search',
               args: [[['company_id', '=', companyId]]],
               kwargs: { 
-                limit: 50000, // 限制最大订单数，避免性能问题
+                limit: 10000, // 优化：减少limit，提升响应速度
                 context: ctx 
               }
             }, sessionId, base).catch(() => []);
@@ -1265,9 +1289,13 @@ export async function GET(req: NextRequest) {
         if (searchMode === 'exact' && search.trim()) {
           const exactTerm = search.trim().toLowerCase();
           allProductsList = allProductsList.filter((p: any) => {
-            const nameMatch = p.name?.toLowerCase() === exactTerm;
-            const codeMatch = p.default_code?.toLowerCase() === exactTerm;
-            const barcodeMatch = p.barcode?.toLowerCase() === exactTerm;
+            const nameLower = p.name?.toLowerCase() || '';
+            const codeLower = p.default_code?.toLowerCase() || '';
+            const barcodeLower = p.barcode?.toLowerCase() || '';
+            // 精确搜索：搜索词必须作为完整子字符串出现在名称、SKU或条码中
+            const nameMatch = nameLower.includes(exactTerm);
+            const codeMatch = codeLower.includes(exactTerm);
+            const barcodeMatch = barcodeLower.includes(exactTerm);
             return nameMatch || codeMatch || barcodeMatch;
           });
         }
@@ -1275,13 +1303,18 @@ export async function GET(req: NextRequest) {
         // 应用模糊搜索的引号短语过滤
         if (searchMode === 'fuzzy' && search.trim()) {
           const searchTerm = search.trim();
+          // 辅助函数：检查字符是否是引号（支持中英文引号）
+          const isQuote = (char: string) => {
+            return char === '"' || char === '"' || char === '"';
+          };
+          
           const exactPhrases: string[] = [];
           let currentPart = '';
           let inQuotes = false;
           
           for (let i = 0; i < searchTerm.length; i++) {
             const char = searchTerm[i];
-            if (char === '"') {
+            if (isQuote(char)) {
               if (inQuotes) {
                 if (currentPart.trim()) {
                   exactPhrases.push(currentPart.trim().toLowerCase());
@@ -1300,9 +1333,13 @@ export async function GET(req: NextRequest) {
           if (exactPhrases.length > 0) {
             allProductsList = allProductsList.filter((p: any) => {
               return exactPhrases.every(phrase => {
-                const nameMatch = p.name?.toLowerCase() === phrase;
-                const codeMatch = p.default_code?.toLowerCase() === phrase;
-                const barcodeMatch = p.barcode?.toLowerCase() === phrase;
+                const nameLower = p.name?.toLowerCase() || '';
+                const codeLower = p.default_code?.toLowerCase() || '';
+                const barcodeLower = p.barcode?.toLowerCase() || '';
+                // 引号短语：必须作为完整子字符串出现在名称、SKU或条码中
+                const nameMatch = nameLower.includes(phrase);
+                const codeMatch = codeLower.includes(phrase);
+                const barcodeMatch = barcodeLower.includes(phrase);
                 return nameMatch || codeMatch || barcodeMatch;
               });
             });

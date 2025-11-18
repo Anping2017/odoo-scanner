@@ -129,7 +129,7 @@ export default function ProductsPage() {
       
       // 添加标志：只返回搜索结果，不进行客户端筛选、排序、分页
       params.append('search_only', 'true');
-      params.append('page_size', '5000'); // 减少一次性获取的数量，避免超时
+      params.append('page_size', '2000'); // 优化：减少一次性获取的数量，提升响应速度
 
       // 添加超时控制
       const controller = new AbortController();
@@ -454,28 +454,88 @@ export default function ProductsPage() {
 
     // 应用搜索条件（如果没有搜索条件，显示所有产品）
     if (apiSearchTerm.trim()) {
-      const searchTerm = apiSearchTerm.trim().toLowerCase();
-      const keywords = searchTerm.split(/\s+/).filter(k => k.length > 0);
+      const searchTerm = apiSearchTerm.trim();
       
       filtered = filtered.filter(p => {
         const nameLower = p.name.toLowerCase();
         const skuLower = (p.default_code || '').toLowerCase();
         
         if (searchMode === 'exact') {
-          // 精确搜索
-          return nameLower === searchTerm || skuLower === searchTerm;
+          // 精确搜索：搜索词必须作为完整子字符串出现在名称或SKU中
+          const searchTermLower = searchTerm.toLowerCase();
+          return nameLower.includes(searchTermLower) || skuLower.includes(searchTermLower);
         } else if (searchMode === 'name') {
           // 按名称搜索
+          const keywords = searchTerm.toLowerCase().split(/\s+/).filter(k => k.length > 0);
           return keywords.every(k => nameLower.includes(k));
         } else if (searchMode === 'sku') {
           // 按SKU搜索
+          const keywords = searchTerm.toLowerCase().split(/\s+/).filter(k => k.length > 0);
           return keywords.every(k => skuLower.includes(k));
         } else {
-          // 模糊搜索
-          return keywords.every(k => 
-            nameLower.includes(k) || 
-            skuLower.includes(k)
-          );
+          // 模糊搜索：支持引号包裹的精确短语（支持中英文引号）
+          // 辅助函数：检查字符是否是引号（支持中英文引号）
+          const isQuote = (char: string) => {
+            return char === '"' || char === '"' || char === '"';
+          };
+          
+          // 解析搜索词：分离引号短语和普通关键词
+          const parts: Array<{type: 'exact' | 'fuzzy', value: string}> = [];
+          let currentPart = '';
+          let inQuotes = false;
+          
+          for (let i = 0; i < searchTerm.length; i++) {
+            const char = searchTerm[i];
+            if (isQuote(char)) {
+              if (inQuotes) {
+                // 结束引号
+                if (currentPart.trim()) {
+                  parts.push({ type: 'exact', value: currentPart.trim().toLowerCase() });
+                }
+                currentPart = '';
+                inQuotes = false;
+              } else {
+                // 开始引号
+                if (currentPart.trim()) {
+                  // 将引号前的部分作为模糊关键词处理
+                  const fuzzyKeywords = currentPart.trim().toLowerCase().split(/\s+/).filter(k => k.length > 0);
+                  fuzzyKeywords.forEach(k => parts.push({ type: 'fuzzy', value: k }));
+                }
+                currentPart = '';
+                inQuotes = true;
+              }
+            } else {
+              currentPart += char;
+            }
+          }
+          
+          // 处理最后一部分
+          if (currentPart.trim()) {
+            if (inQuotes) {
+              parts.push({ type: 'exact', value: currentPart.trim().toLowerCase() });
+            } else {
+              // 将剩余部分拆分为多个模糊关键词
+              const fuzzyKeywords = currentPart.trim().toLowerCase().split(/\s+/).filter(k => k.length > 0);
+              fuzzyKeywords.forEach(k => parts.push({ type: 'fuzzy', value: k }));
+            }
+          }
+          
+          // 如果没有解析出任何部分，使用整个搜索词作为模糊搜索
+          if (parts.length === 0) {
+            const keywords = searchTerm.toLowerCase().split(/\s+/).filter(k => k.length > 0);
+            keywords.forEach(k => parts.push({ type: 'fuzzy', value: k }));
+          }
+          
+          // 检查所有部分是否匹配
+          return parts.every(part => {
+            if (part.type === 'exact') {
+              // 精确短语：必须作为完整子字符串出现在名称或SKU中
+              return nameLower.includes(part.value) || skuLower.includes(part.value);
+            } else {
+              // 模糊关键词：在名称或SKU中出现即可
+              return nameLower.includes(part.value) || skuLower.includes(part.value);
+            }
+          });
         }
       });
     }
@@ -3129,19 +3189,21 @@ export default function ProductsPage() {
                           📦
                         </div>
                       )}
-                      <div style={{
-                        fontSize: '12px',
-                        fontWeight: 500,
-                        color: '#111827',
-                        textAlign: 'center',
-                        wordBreak: 'break-word',
-                        width: '100%',
-                        lineHeight: '1.4',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden'
-                      }}>
+                      <div 
+                        title={product.name}
+                        style={{
+                          fontSize: '12px',
+                          fontWeight: 500,
+                          color: '#111827',
+                          textAlign: 'center',
+                          wordBreak: 'break-word',
+                          width: '100%',
+                          lineHeight: '1.4',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden'
+                        }}>
                         {product.name}
                       </div>
                       <div style={{
