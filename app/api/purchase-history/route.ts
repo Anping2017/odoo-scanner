@@ -147,11 +147,11 @@ export async function GET(req: NextRequest) {
     }
 
     // 获取采购订单信息
-    const lineOrderIds = [...new Set(purchaseLines.map((line: any) => line.order_id?.[0]).filter(Boolean))];
+    const lineOrderIds: number[] = [...new Set(purchaseLines.map((line: any) => line.order_id?.[0]).filter(Boolean))] as number[];
     if (lineOrderIds.length > 0) {
       // 如果有多公司过滤，只读取属于当前公司的订单
       const orderIdsToRead = companyId 
-        ? lineOrderIds.filter(id => companyOrderIds.includes(id))
+        ? lineOrderIds.filter((id: number) => companyOrderIds.includes(id))
         : lineOrderIds;
       
       if (orderIdsToRead.length > 0) {
