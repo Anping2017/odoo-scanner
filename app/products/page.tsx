@@ -411,39 +411,64 @@ export default function ProductsPage() {
     }
   }, []);
 
-  // 下载所有产品数据到本地
+  // 下载所有产品数据到本地（支持分页下载，确保获取所有产品）
   const downloadOfflineData = useCallback(async () => {
     setDownloadingOfflineData(true);
     setError(null);
     try {
-      // 获取所有产品数据（不进行筛选）
-      const params = new URLSearchParams();
-      params.append('search_only', 'true');
-      params.append('page_size', '50000'); // 获取尽可能多的数据
+      const allProducts: Product[] = [];
+      let offset = 0;
+      const batchSize = 10000; // 每批下载 10000 个产品
+      let hasMore = true;
+      let totalDownloaded = 0;
 
-      const res = await fetch(`/api/products?${params.toString()}`, { 
-        cache: 'no-store'
-      });
-      
-      if (!res.ok) {
-        if (res.status === 401) {
-          window.location.href = '/';
-          return;
+      // 分页下载所有产品数据
+      while (hasMore) {
+        const params = new URLSearchParams();
+        params.append('search_only', 'true');
+        params.append('page_size', batchSize.toString());
+        params.append('offset', offset.toString());
+
+        const res = await fetch(`/api/products?${params.toString()}`, { 
+          cache: 'no-store'
+        });
+        
+        if (!res.ok) {
+          if (res.status === 401) {
+            window.location.href = '/';
+            return;
+          }
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         }
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-      }
 
-      const data = await res.json();
+        const data = await res.json();
 
-      if (data.error) {
-        if (data.error.includes('未登录') || data.error.includes('未认证') || data.error.includes('Unauthorized')) {
-          window.location.href = '/';
-          return;
+        if (data.error) {
+          if (data.error.includes('未登录') || data.error.includes('未认证') || data.error.includes('Unauthorized')) {
+            window.location.href = '/';
+            return;
+          }
+          throw new Error(data.error);
         }
-        throw new Error(data.error);
-      }
 
-      const allProducts = Array.isArray(data.products) ? data.products : [];
+        const products = Array.isArray(data.products) ? data.products : [];
+        
+        if (products.length === 0) {
+          // 没有更多数据了
+          hasMore = false;
+        } else {
+          allProducts.push(...products);
+          totalDownloaded += products.length;
+          
+          // 如果返回的产品数量少于 batchSize，说明已经是最后一批了
+          if (products.length < batchSize) {
+            hasMore = false;
+          } else {
+            // 继续下载下一批
+            offset += batchSize;
+          }
+        }
+      }
       
       // 保存到IndexedDB（支持更大的数据量）
       if (typeof window !== 'undefined') {

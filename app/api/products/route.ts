@@ -477,8 +477,11 @@ export async function GET(req: NextRequest) {
           ]
         ],
         kwargs: {
-          limit: parseInt(pageSize.toString()) || 5000, // 使用传入的page_size，默认5000
-          offset: 0,
+          // 对于离线数据下载，使用更大的 limit，但不超过 Odoo 的实际限制
+          // Odoo 默认最大 limit 通常是 10000，但某些配置可能更小
+          // 如果 page_size 参数很大，我们尝试使用它，但设置一个合理的上限
+          limit: Math.min(parseInt(pageSize.toString()) || 10000, 100000), // 最大 100000，但实际可能受 Odoo 限制
+          offset: parseInt(searchParams.get('offset') || '0'), // 支持 offset 参数用于分页下载
           order: 'name asc', // 简单排序，客户端会重新排序
           context: ctx
         }
