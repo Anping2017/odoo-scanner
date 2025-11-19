@@ -482,51 +482,6 @@ export default function ReceivingPage() {
           <div className="top-nav-right" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
               className="top-nav-button"
-              onClick={() => window.location.href = '/scan'}
-              style={{
-                padding: '8px 16px',
-                borderRadius: 8,
-                border: '1px solid #d1d5db',
-                background: '#fff',
-                color: '#374151',
-                fontSize: 14,
-                cursor: 'pointer',
-              }}
-            >
-              扫码盘点
-            </button>
-            <button
-              className="top-nav-button"
-              onClick={() => window.location.href = '/parts-inventory'}
-              style={{
-                padding: '8px 16px',
-                borderRadius: 8,
-                border: '1px solid #d1d5db',
-                background: '#fff',
-                color: '#374151',
-                fontSize: 14,
-                cursor: 'pointer',
-              }}
-            >
-              库存盘点
-            </button>
-            <button
-              className="top-nav-button"
-              onClick={() => window.location.href = '/products'}
-              style={{
-                padding: '8px 16px',
-                borderRadius: 8,
-                border: '1px solid #d1d5db',
-                background: '#fff',
-                color: '#374151',
-                fontSize: 14,
-                cursor: 'pointer',
-              }}
-            >
-              产品查询
-            </button>
-            <button
-              className="top-nav-button"
               onClick={handleLogout}
               style={{
                 padding: '8px 16px',

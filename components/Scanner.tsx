@@ -4,9 +4,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 import { DecodeHintType, BarcodeFormat } from '@zxing/library';
 
-type Props = { onDetected: (text: string) => void; highPrecision?: boolean };
+type Props = { 
+  onDetected: (text: string) => void; 
+  highPrecision?: boolean;
+  code93Mode?: boolean; // 从外部传入的 code93Mode
+  onCode93ModeChange?: (mode: boolean) => void; // 用于通知外部状态变化
+};
 
-export default function Scanner({ onDetected, highPrecision = true }: Props) {
+export default function Scanner({ onDetected, highPrecision = true, code93Mode: externalCode93Mode, onCode93ModeChange }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const readerRef = useRef<BrowserMultiFormatReader | null>(null);
@@ -19,7 +24,9 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
   const [isFocused, setIsFocused] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isZooming, setIsZooming] = useState(false);
-  const [code93Mode, setCode93Mode] = useState(false); // 默认兼容所有条码格式
+  // 如果外部传入了 code93Mode，使用外部的；否则使用内部状态
+  const [internalCode93Mode, setInternalCode93Mode] = useState(false);
+  const code93Mode = externalCode93Mode !== undefined ? externalCode93Mode : internalCode93Mode;
   const [showScanHint, setShowScanHint] = useState(true); // 控制扫码提示显示
 
   const clearRaf = () => {
@@ -599,62 +606,7 @@ export default function Scanner({ onDetected, highPrecision = true }: Props) {
           100% { opacity: 0; }
         }
       `}</style>
-      {/* 工具条 */}
-      <div style={{ 
-        display: 'flex', 
-        gap: 8, 
-        alignItems: 'center', 
-        flexWrap: 'wrap', 
-        padding: '8px',
-        justifyContent: 'center',
-      }}>
-        <label style={{ 
-          ...btnStyle, 
-          cursor: 'pointer', 
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
-          从相册选择
-          <input 
-            type="file" 
-            accept="image/*" 
-            style={{ display: 'none' }} 
-            onChange={onPickFile}
-          />
-        </label>
-        
-        {/* Code 93模式切换 */}
-        <button 
-          style={{
-            ...btnStyle,
-            backgroundColor: code93Mode ? '#10b981' : '#fff',
-            color: code93Mode ? '#fff' : '#000',
-            fontWeight: code93Mode ? 600 : 400,
-            borderColor: code93Mode ? '#10b981' : '#ddd',
-          }}
-          onClick={() => {
-            setCode93Mode(!code93Mode);
-            // 重新初始化识别器
-            readerRef.current = null;
-          }}
-          onMouseEnter={(e) => {
-            if (!code93Mode) {
-              e.currentTarget.style.borderColor = '#10b981';
-              e.currentTarget.style.color = '#10b981';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!code93Mode) {
-              e.currentTarget.style.borderColor = '#ddd';
-              e.currentTarget.style.color = '#000';
-            }
-          }}
-        >
-          {code93Mode ? 'Code 93专用' : '兼容所有条码'}
-        </button>
-        
-      </div>
+      {/* 工具条已移除，按钮已移到顶部导航栏 */}
 
       {/* 视频区域 */}
       <div style={{ 

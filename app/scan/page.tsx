@@ -56,8 +56,16 @@ type PurchaseItem = {
 };
 
 export default function ScanPage() {
+  // 从 localStorage 读取扫码工具显示状态，如果不存在则默认为 false（关闭）
+  const getInitialScannerState = () => {
+    if (typeof window === 'undefined') return false;
+    const saved = localStorage.getItem('scan_show_scanner');
+    return saved === 'true';
+  };
+
   const [scanning, setScanning] = useState(true);
-  const [showScanner, setShowScanner] = useState(true); // 控制扫码工具显示，默认启动
+  const [showScanner, setShowScanner] = useState(getInitialScannerState); // 从 localStorage 读取初始状态
+  const [code93Mode, setCode93Mode] = useState(false); // 兼容所有条码模式（false=兼容所有，true=Code 93专用）
   const [isLoading, setIsLoading] = useState(false);
   const [lastCode, setLastCode] = useState<string>('');
   const [product, setProduct] = useState<Product | null>(null);
@@ -225,14 +233,24 @@ export default function ScanPage() {
     setSalesHistory([]);
     lastFetchedCodeRef.current = '';
     setScanning(true);
-    // 重新扫码时，如果扫码工具已隐藏，则显示它
+    // 重新扫码时，如果扫码工具已隐藏，则显示它并保存状态
     if (!showScanner) {
       setShowScanner(true);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('scan_show_scanner', 'true');
+      }
     }
   }, [showScanner]);
 
   const toggleScanner = useCallback(() => {
-    setShowScanner(prev => !prev);
+    setShowScanner(prev => {
+      const newState = !prev;
+      // 保存状态到 localStorage
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('scan_show_scanner', String(newState));
+      }
+      return newState;
+    });
     // 如果隐藏扫码工具，也暂停扫描状态
     if (showScanner) {
       setScanning(false);
@@ -607,128 +625,196 @@ export default function ScanPage() {
           <div className="top-bar-buttons" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
               className="top-bar-button"
-              onClick={() => window.location.href = '/user-guide'}
+              onClick={handleRescan}
               style={{
                 padding: '8px 12px',
                 borderRadius: 10,
-                border: '1px solid #e5e7eb',
+                border: '1px solid #059669',
                 background: '#fff',
-                color: '#374151',
+                color: '#059669',
                 fontWeight: 500,
                 fontSize: 13,
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = '#667eea';
-                e.currentTarget.style.color = '#667eea';
+                e.currentTarget.style.borderColor = '#10b981';
+                e.currentTarget.style.color = '#10b981';
+                e.currentTarget.style.background = '#f0fdf4';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = '#e5e7eb';
-                e.currentTarget.style.color = '#374151';
-              }}
-            >
-              📖 使用说明
-            </button>
-            <button
-              className="top-bar-button"
-              onClick={() => window.location.href = '/parts-inventory'}
-              style={{
-                padding: '8px 12px',
-                borderRadius: 10,
-                border: '1px solid #e5e7eb',
-                background: '#fff',
-                color: '#374151',
-                fontWeight: 500,
-                fontSize: 13,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = '#667eea';
-                e.currentTarget.style.color = '#667eea';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = '#e5e7eb';
-                e.currentTarget.style.color = '#374151';
-              }}
-            >
-              📦 库存盘点
-            </button>
-            <button
-              className="top-bar-button"
-              onClick={() => window.location.href = '/receiving'}
-              style={{
-                padding: '8px 12px',
-                borderRadius: 10,
-                border: '1px solid #e5e7eb',
-                background: '#fff',
-                color: '#374151',
-                fontWeight: 500,
-                fontSize: 13,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = '#667eea';
-                e.currentTarget.style.color = '#667eea';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = '#e5e7eb';
-                e.currentTarget.style.color = '#374151';
-              }}
-            >
-              📥 收货入库
-            </button>
-            <button
-              className="top-bar-button"
-              onClick={() => window.location.href = '/products'}
-              style={{
-                padding: '8px 12px',
-                borderRadius: 10,
-                border: '1px solid #e5e7eb',
-                background: '#fff',
-                color: '#374151',
-                fontWeight: 500,
-                fontSize: 13,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = '#667eea';
-                e.currentTarget.style.color = '#667eea';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = '#e5e7eb';
-                e.currentTarget.style.color = '#374151';
-              }}
-            >
-              🔍 产品查询
-            </button>
-            <button
-              className="top-bar-button"
-              onClick={handleLogout}
-              style={{
-                padding: '8px 12px',
-                borderRadius: 10,
-                border: '1px solid #ef4444',
-                background: '#fff',
-                color: '#ef4444',
-                fontWeight: 600,
-                fontSize: 13,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#ef4444';
-                e.currentTarget.style.color = '#fff';
-              }}
-              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#059669';
+                e.currentTarget.style.color = '#059669';
                 e.currentTarget.style.background = '#fff';
-                e.currentTarget.style.color = '#ef4444';
               }}
             >
-              🚪 退出
+              🔄 重新扫码
+            </button>
+            <label
+              className="top-bar-button"
+              style={{
+                padding: '8px 12px',
+                borderRadius: 10,
+                border: '1px solid #e5e7eb',
+                background: '#fff',
+                color: '#374151',
+                fontWeight: 500,
+                fontSize: 13,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#667eea';
+                e.currentTarget.style.color = '#667eea';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#e5e7eb';
+                e.currentTarget.style.color = '#374151';
+              }}
+            >
+              📷 从相册选择
+              <input
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  
+                  try {
+                    // 使用 Scanner 组件的识别逻辑
+                    const { BrowserMultiFormatReader } = await import('@zxing/browser');
+                    const { DecodeHintType, BarcodeFormat } = await import('@zxing/library');
+                    
+                    const hints = new Map();
+                    hints.set(DecodeHintType.TRY_HARDER, true);
+                    
+                    if (code93Mode) {
+                      hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_93]);
+                    } else {
+                      hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+                        BarcodeFormat.CODE_93,
+                        BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.CODABAR,
+                        BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
+                        BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX, BarcodeFormat.PDF_417, BarcodeFormat.AZTEC,
+                        BarcodeFormat.ITF, BarcodeFormat.RSS_14, BarcodeFormat.RSS_EXPANDED
+                      ]);
+                    }
+                    
+                    const reader = new BrowserMultiFormatReader(hints as any);
+                    const url = URL.createObjectURL(file);
+                    const img = new Image();
+                    img.src = url;
+                    
+                    await new Promise((resolve, reject) => {
+                      img.onload = resolve;
+                      img.onerror = reject;
+                    });
+                    
+                    let result: any;
+                    try {
+                      result = await (reader as any).decodeFromImage(img);
+                    } catch {
+                      result = await (reader as any).decodeFromImageElement?.(img);
+                    }
+                    
+                    URL.revokeObjectURL(url);
+                    let code = result?.getText ? result.getText() : (result?.text || '');
+                    
+                    // 尝试原生检测器
+                    if (!code && typeof (globalThis as any).BarcodeDetector === 'function') {
+                      const Detector = (globalThis as any).BarcodeDetector;
+                      const fmts = await Detector.getSupportedFormats?.() || [];
+                      const formats = code93Mode
+                        ? ['code_93'].filter(f => fmts.includes(f))
+                        : [
+                            'code_93', 'code_128', 'code_39', 'codabar', 'code_11',
+                            'ean_13', 'ean_8', 'upc_a', 'upc_e', 'upc_ean_extension',
+                            'qr_code', 'data_matrix', 'pdf417', 'aztec',
+                            'itf', 'rss_14', 'rss_expanded'
+                          ].filter(f => fmts.includes(f));
+                      
+                      if (formats.length > 0) {
+                        const bmp = await createImageBitmap(file);
+                        const res = await new Detector({ formats }).detect(bmp as any);
+                        const detectedCode = res?.[0]?.rawValue ? String(res[0].rawValue) : '';
+                        if (detectedCode) {
+                          code = detectedCode;
+                        }
+                      }
+                    }
+                    
+                    if (code) {
+                      fetchByCode(code);
+                    } else {
+                      alert('未识别到条码，请选择更清晰的照片重试。');
+                    }
+                  } catch (error: any) {
+                    alert('图片识别失败：' + (error?.message || String(error)));
+                  } finally {
+                    e.target.value = '';
+                  }
+                }}
+              />
+            </label>
+            <button
+              className="top-bar-button"
+              onClick={() => {
+                setCode93Mode(!code93Mode);
+              }}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 10,
+                border: '1px solid #e5e7eb',
+                background: code93Mode ? '#10b981' : '#fff',
+                color: code93Mode ? '#fff' : '#374151',
+                fontWeight: code93Mode ? 600 : 500,
+                fontSize: 13,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                if (!code93Mode) {
+                  e.currentTarget.style.borderColor = '#10b981';
+                  e.currentTarget.style.color = '#10b981';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!code93Mode) {
+                  e.currentTarget.style.borderColor = '#e5e7eb';
+                  e.currentTarget.style.color = '#374151';
+                }
+              }}
+            >
+              {code93Mode ? 'Code 93专用' : '兼容所有条码'}
+            </button>
+            <button
+              className="top-bar-button"
+              onClick={toggleScanner}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 10,
+                border: '1px solid #e5e7eb',
+                background: '#fff',
+                color: '#374151',
+                fontWeight: 500,
+                fontSize: 13,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#667eea';
+                e.currentTarget.style.color = '#667eea';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#e5e7eb';
+                e.currentTarget.style.color = '#374151';
+              }}
+            >
+              {showScanner ? '👁️ 隐藏相机' : '👁️‍🗨️ 显示相机'}
             </button>
           </div>
         </div>
@@ -781,7 +867,11 @@ export default function ScanPage() {
             }}
           >
             {scanning ? (
-              <Scanner onDetected={handleDetected} />
+              <Scanner 
+                onDetected={handleDetected} 
+                code93Mode={code93Mode}
+                onCode93ModeChange={setCode93Mode}
+              />
             ) : (
               <div
                 style={{
@@ -799,41 +889,6 @@ export default function ScanPage() {
                 <div>摄像头已暂停</div>
               </div>
             )}
-            {/* 隐藏扫码工具按钮 - 移到左下角避免遮挡 */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleScanner();
-              }}
-              style={{
-                position: 'absolute',
-                bottom: 12,
-                left: 12,
-                padding: '8px 12px',
-                borderRadius: 8,
-                border: 'none',
-                background: 'rgba(0, 0, 0, 0.7)',
-                color: '#fff',
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: 'pointer',
-                zIndex: 10,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                backdropFilter: 'blur(10px)',
-                transition: 'all 0.2s ease',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(0, 0, 0, 0.9)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(0, 0, 0, 0.7)';
-              }}
-            >
-              <span>👁️</span>
-              <span>隐藏</span>
-            </button>
           </div>
         )}
 

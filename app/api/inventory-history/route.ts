@@ -52,7 +52,10 @@ export async function GET(req: NextRequest) {
       model: 'inventory.history_8070',
       method: 'search_read',
       args: [
-        [['notes', 'not like', 'ACTIVITY:%']], // 过滤掉活动记录
+        [
+          ['notes', 'not like', 'ACTIVITY:%'], // 过滤掉活动记录
+          ['notes', 'not like', 'RECYCLE:%']   // 过滤掉回收历史记录
+        ],
         [
           'id',
           'store_name',

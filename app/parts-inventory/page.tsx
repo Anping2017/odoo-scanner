@@ -121,6 +121,7 @@ export default function PartsInventoryPage() {
   // 盘点完成弹窗状态
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [isAutoEnding, setIsAutoEnding] = useState(false); // 标记是否正在自动结束盘点
+  const [isSavingHistory, setIsSavingHistory] = useState(false); // 标记是否正在保存历史记录
   
   // 未完成确认弹窗状态
   const [showIncompleteConfirmModal, setShowIncompleteConfirmModal] = useState(false);
@@ -551,6 +552,15 @@ export default function PartsInventoryPage() {
       return;
     }
     
+    // 防止重复保存：如果正在保存，直接返回
+    if (isSavingHistory) {
+      console.log('正在保存历史记录，跳过重复调用');
+      return;
+    }
+    
+    // 设置保存标志
+    setIsSavingHistory(true);
+    
     const durationMinutes = Math.round((Date.now() - inventoryStartTime) / 60000);
     const scanRate = inventoryStats.totalCount > 0 
       ? Math.round((inventoryStats.scanCount / inventoryStats.totalCount) * 100) 
@@ -631,8 +641,11 @@ export default function PartsInventoryPage() {
       console.error('保存零配件盘点历史记录失败:', e);
       showMessage(`保存历史记录失败: ${e.message}`);
       return false;
+    } finally {
+      // 清除保存标志
+      setIsSavingHistory(false);
     }
-  }, [inventoryStartTime, operatorName, selectedParts.size, inventoryStats, totalCount, selectedCategory, inventoryStartDate, operatorParts, operatorDates, showMessage]);
+  }, [inventoryStartTime, operatorName, selectedParts.size, inventoryStats, totalCount, selectedCategory, inventoryStartDate, operatorParts, operatorDates, showMessage, isSavingHistory]);
 
   // 结束盘点
   const handleEndInventory = useCallback(() => {
@@ -1311,37 +1324,6 @@ export default function PartsInventoryPage() {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ fontWeight: 700, fontSize: 16 }}>库存盘点</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={() => window.location.href = '/products'}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: 8,
-                  border: '1px solid #e5e7eb',
-                  background: '#fff',
-                  color: '#374151',
-                  fontWeight: 500,
-                  fontSize: 14,
-                  cursor: 'pointer',
-                }}
-              >
-                🔍 产品查询
-              </button>
-              <button
-                onClick={handleBack}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: 8,
-                  border: '1px solid #e5e7eb',
-                  background: '#fff',
-                  color: '#374151',
-                  fontWeight: 500,
-                  fontSize: 14,
-                }}
-              >
-                返回
-              </button>
-            </div>
           </div>
         </div>
 

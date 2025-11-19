@@ -54,8 +54,13 @@ export default function LoginPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || '登录失败');
 
-      // 跳转到扫码页
-      window.location.href = '/scan';
+      // 登录成功后，清除扫码工具的显示状态，下次打开时默认为关闭
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('scan_show_scanner');
+      }
+
+      // 跳转到功能主页
+      window.location.href = '/dashboard';
     } catch (e: any) {
       setErr(e?.message || '登录失败');
     } finally {

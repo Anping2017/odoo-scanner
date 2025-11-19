@@ -216,6 +216,10 @@ export default function InventoryHistoryPage() {
   // 过滤历史记录（使用useMemo以便在toggleSelectAll之前定义）
   const filteredHistories = useMemo(() => {
     return histories.filter(history => {
+      // 过滤掉回收历史记录（notes 以 "RECYCLE:" 开头）
+      if (history.notes && history.notes.startsWith('RECYCLE:')) {
+        return false;
+      }
       const storeMatch = !filterStore || history.store_name.toLowerCase().includes(filterStore.toLowerCase());
       const userMatch = !filterUser || history.user_name.toLowerCase().includes(filterUser.toLowerCase());
       const category = getCategory(history.notes);
@@ -280,6 +284,8 @@ export default function InventoryHistoryPage() {
 
     // 按门店和类型分组，找出最新的记录
     histories.forEach(history => {
+      // 跳过回收历史记录
+      if (history.notes && history.notes.startsWith('RECYCLE:')) return;
       const category = getCategory(history.notes);
       if (category === 'Unknown') return;
 

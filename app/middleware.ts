@@ -13,7 +13,15 @@ export function middleware(req: NextRequest) {
   if (pathname === '/') {
     if (authed) {
       const url = req.nextUrl.clone();
-      url.pathname = '/scan';
+      url.pathname = '/dashboard';
+      return NextResponse.redirect(url);
+    }
+  }
+
+  if (pathname.startsWith('/dashboard')) {
+    if (!authed) {
+      const url = req.nextUrl.clone();
+      url.pathname = '/';
       return NextResponse.redirect(url);
     }
   }
@@ -35,5 +43,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/', '/scan', '/device-inventory', '/parts-inventory', '/parts-inventory-history', '/inventory-history', '/products', '/receiving/:path*', '/recycle'],
+  matcher: ['/', '/dashboard', '/scan', '/device-inventory', '/parts-inventory', '/parts-inventory-history', '/inventory-history', '/products', '/receiving/:path*', '/recycle'],
 };

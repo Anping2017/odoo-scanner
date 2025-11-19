@@ -110,6 +110,7 @@ export default function DeviceInventoryPage() {
   
   // 盘点完成弹窗状态
   const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [isSavingHistory, setIsSavingHistory] = useState(false); // 标记是否正在保存历史记录
   
   // 未完成确认弹窗状态
   const [showIncompleteConfirmModal, setShowIncompleteConfirmModal] = useState(false);
@@ -305,6 +306,15 @@ export default function DeviceInventoryPage() {
       return;
     }
     
+    // 防止重复保存：如果正在保存，直接返回
+    if (isSavingHistory) {
+      console.log('正在保存历史记录，跳过重复调用');
+      return;
+    }
+    
+    // 设置保存标志
+    setIsSavingHistory(true);
+    
     const durationMinutes = Math.round((Date.now() - inventoryStartTime) / 60000);
     const scanRate = inventoryStats.totalCount > 0 ? Math.round((inventoryStats.scanCount / inventoryStats.totalCount) * 100) : 0;
     
@@ -449,8 +459,11 @@ export default function DeviceInventoryPage() {
     } catch (e: any) {
       console.error('保存盘点历史失败:', e);
       showMessage(`保存失败: ${e?.message || '网络错误'}`);
+    } finally {
+      // 清除保存标志
+      setIsSavingHistory(false);
     }
-  }, [inventoryStartTime, inventoryStats, devices.length, selectedDevices.size, operatorParts, operatorDates, operatorStartCounts, inventoryStartDate, operatorName, showMessage, loadInventoryState]);
+  }, [inventoryStartTime, inventoryStats, devices.length, selectedDevices.size, operatorParts, operatorDates, operatorStartCounts, inventoryStartDate, operatorName, showMessage, loadInventoryState, isSavingHistory]);
 
   // 自动结束盘点
   const autoEndInventory = useCallback(() => {
@@ -1040,49 +1053,6 @@ export default function DeviceInventoryPage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontWeight: 700, fontSize: 16 }}>设备盘点</div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => window.location.href = '/products'}
-              style={{
-                padding: '8px 12px',
-                borderRadius: 8,
-                border: '1px solid #e5e7eb',
-                background: '#fff',
-                color: '#374151',
-                fontWeight: 500,
-                fontSize: 14,
-                cursor: 'pointer',
-              }}
-            >
-              🔍 产品查询
-            </button>
-            <button
-              onClick={handleBack}
-              style={{
-                padding: '8px 12px',
-                borderRadius: 8,
-                border: '1px solid #e5e7eb',
-                background: '#fff',
-                color: '#374151',
-                fontWeight: 500,
-                fontSize: 14,
-              }}
-            >
-              ⬅️ 返回
-            </button>
-            <button
-              onClick={() => window.location.href = '/inventory-history'}
-              style={{
-                padding: '8px 12px',
-                borderRadius: 8,
-                border: '1px solid #e5e7eb',
-                background: '#fff',
-                color: '#374151',
-                fontWeight: 500,
-                fontSize: 14,
-              }}
-            >
-              📊 盘点历史
-            </button>
             {!isInventoryMode ? (
               <>
                 {loadInventoryState() && (
