@@ -784,8 +784,8 @@ export default function ScanPage() {
               }}
               onMouseLeave={(e) => {
                 if (!code93Mode) {
-                  e.currentTarget.style.borderColor = '#e5e7eb';
-                  e.currentTarget.style.color = '#374151';
+                e.currentTarget.style.borderColor = '#e5e7eb';
+                e.currentTarget.style.color = '#374151';
                 }
               }}
             >

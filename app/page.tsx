@@ -2,7 +2,6 @@
 
 import { useMemo, useState, useRef, useEffect } from 'react';
 import DomainPicker, { DomainPreset } from '@/components/DomainPicker';
-import CompanyPicker from '@/components/CompanyPicker';
 
 export default function LoginPage() {
   const [login, setLogin] = useState('');
@@ -10,19 +9,15 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true); // 30 天保持登录
   const [preset, setPreset] = useState<DomainPreset | null>(null);
-  const [companyId, setCompanyId] = useState<number | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState('');
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const loginInputRef = useRef<HTMLInputElement>(null);
 
-  const isMoboplus = preset?.key === 'moboplus.co.nz';
-
   const canSubmit = useMemo(() => {
     if (!login || !password || !preset) return false;
-    if (isMoboplus && !companyId) return false;
     return !submitting;
-  }, [login, password, preset, isMoboplus, companyId, submitting]);
+  }, [login, password, preset, submitting]);
 
   // 页面加载时自动聚焦第一个输入框
   useEffect(() => {
@@ -46,7 +41,6 @@ export default function LoginPage() {
           login,
           password,
           remember,
-          companyId: isMoboplus ? companyId : undefined, // 只有 moboplus 传公司
           baseUrl: preset.url,                             // 指定 Odoo URL
           dbName: preset.db,                               // 指定 Odoo DB
         }),
@@ -365,11 +359,6 @@ export default function LoginPage() {
               {showPassword ? '👁️' : '👁️‍🗨️'}
             </button>
           </div>
-        </div>
-
-        {/* moboplus 域名时，显示公司 ID 单选 */}
-        <div className="company-picker-container" style={{ marginBottom: '20px' }}>
-          <CompanyPicker show={isMoboplus} required={isMoboplus} onChange={setCompanyId} />
         </div>
 
         {/* 记住登录选项 */}

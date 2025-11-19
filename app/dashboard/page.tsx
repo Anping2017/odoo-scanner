@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface FeatureCard {
@@ -88,18 +88,38 @@ const features: FeatureCard[] = [
   },
 ];
 
+interface Company {
+  id: number;
+  name: string;
+}
+
+const styleContent = `@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}@keyframes slideIn{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}.feature-card{animation:fadeIn 0.4s ease-out;animation-fill-mode:both}.feature-card:nth-child(1){animation-delay:0.05s}.feature-card:nth-child(2){animation-delay:0.1s}.feature-card:nth-child(3){animation-delay:0.15s}.feature-card:nth-child(4){animation-delay:0.2s}.feature-card:nth-child(5){animation-delay:0.25s}.feature-card:nth-child(6){animation-delay:0.3s}.feature-card:nth-child(7){animation-delay:0.35s}.feature-card:nth-child(8){animation-delay:0.4s}@media (max-width:768px){.dashboard-container{padding:12px!important;paddingBottom:calc(92px + env(safe-area-inset-bottom))!important}.header-section{padding:16px!important;margin-bottom:16px!important}.header-title{font-size:24px!important}.header-subtitle{font-size:14px!important}.features-grid{grid-template-columns:repeat(2,1fr)!important;gap:12px!important}.feature-card{padding:16px!important;min-height:120px!important}.feature-icon{font-size:32px!important;margin-bottom:8px!important}.feature-title{font-size:15px!important;margin-bottom:4px!important}.feature-description{font-size:12px!important;line-height:1.4!important}.logout-button{padding:10px 16px!important;font-size:14px!important;min-height:44px!important}}@media (max-width:480px){.dashboard-container{padding:8px!important;paddingBottom:calc(92px + env(safe-area-inset-bottom))!important}.header-section{padding:12px!important;margin-bottom:12px!important}.header-title{font-size:20px!important}.header-subtitle{font-size:13px!important}.features-grid{grid-template-columns:1fr!important;gap:10px!important}.feature-card{padding:14px!important;min-height:110px!important}.feature-icon{font-size:28px!important;margin-bottom:6px!important}.feature-title{font-size:14px!important}.feature-description{font-size:11px!important}}@media (hover:none) and (pointer:coarse){.feature-card{min-height:120px!important}button{min-height:44px!important}}`;
+
 export default function DashboardPage() {
   const router = useRouter();
-  const [userInfo, setUserInfo] = useState<{ name?: string; company?: string } | null>(null);
+  const [userInfo, setUserInfo] = useState<{ 
+    name?: string; 
+    company?: string;
+    currentCompanyId?: number;
+    companies?: Company[];
+    canSwitchCompany?: boolean;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showCompanyPicker, setShowCompanyPicker] = useState(false);
+  const [switchingCompany, setSwitchingCompany] = useState(false);
 
   useEffect(() => {
     // 检查登录状态并获取用户信息
     fetch('/api/user-info')
       .then(res => res.json())
       .then(data => {
-        if (data.success && data.company_name) {
-          setUserInfo({ company: data.company_name });
+        if (data.success) {
+          setUserInfo({
+            company: data.company_name,
+            currentCompanyId: data.current_company_id,
+            companies: data.companies || [],
+            canSwitchCompany: data.can_switch_company || false,
+          });
         }
         setLoading(false);
       })
@@ -107,6 +127,47 @@ export default function DashboardPage() {
         setLoading(false);
       });
   }, []);
+
+  // 点击外部关闭公司选择器
+  useEffect(() => {
+    if (!showCompanyPicker) return;
+    
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.company-picker-wrapper') && !target.closest('.company-switch-button')) {
+        setShowCompanyPicker(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showCompanyPicker]);
+
+  const handleSwitchCompany = async (companyId: number) => {
+    if (switchingCompany) return;
+    
+    setSwitchingCompany(true);
+    try {
+      const res = await fetch('/api/switch-company', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ companyId }),
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || '切换公司失败');
+      }
+      
+      // 刷新页面以应用新的公司设置
+      window.location.reload();
+    } catch (error: any) {
+      alert(`切换公司失败: ${error.message || '未知错误'}`);
+      setSwitchingCompany(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -120,124 +181,7 @@ export default function DashboardPage() {
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translateX(-20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
-        }
-        .feature-card {
-          animation: fadeIn 0.4s ease-out;
-          animation-fill-mode: both;
-        }
-        .feature-card:nth-child(1) { animation-delay: 0.05s; }
-        .feature-card:nth-child(2) { animation-delay: 0.1s; }
-        .feature-card:nth-child(3) { animation-delay: 0.15s; }
-        .feature-card:nth-child(4) { animation-delay: 0.2s; }
-        .feature-card:nth-child(5) { animation-delay: 0.25s; }
-        .feature-card:nth-child(6) { animation-delay: 0.3s; }
-        .feature-card:nth-child(7) { animation-delay: 0.35s; }
-        .feature-card:nth-child(8) { animation-delay: 0.4s; }
-        
-        @media (max-width: 768px) {
-          .dashboard-container {
-            padding: 12px !important;
-            paddingBottom: calc(92px + env(safe-area-inset-bottom)) !important;
-          }
-          .header-section {
-            padding: 16px !important;
-            margin-bottom: 16px !important;
-          }
-          .header-title {
-            font-size: 24px !important;
-          }
-          .header-subtitle {
-            font-size: 14px !important;
-          }
-          .features-grid {
-            grid-template-columns: repeat(2, 1fr) !important;
-            gap: 12px !important;
-          }
-          .feature-card {
-            padding: 16px !important;
-            min-height: 120px !important;
-          }
-          .feature-icon {
-            font-size: 32px !important;
-            margin-bottom: 8px !important;
-          }
-          .feature-title {
-            font-size: 15px !important;
-            margin-bottom: 4px !important;
-          }
-          .feature-description {
-            font-size: 12px !important;
-            line-height: 1.4 !important;
-          }
-          .logout-button {
-            padding: 10px 16px !important;
-            font-size: 14px !important;
-            min-height: 44px !important;
-          }
-        }
-        @media (max-width: 480px) {
-          .dashboard-container {
-            padding: 8px !important;
-            paddingBottom: calc(92px + env(safe-area-inset-bottom)) !important;
-          }
-          .header-section {
-            padding: 12px !important;
-            margin-bottom: 12px !important;
-          }
-          .header-title {
-            font-size: 20px !important;
-          }
-          .header-subtitle {
-            font-size: 13px !important;
-          }
-          .features-grid {
-            grid-template-columns: 1fr !important;
-            gap: 10px !important;
-          }
-          .feature-card {
-            padding: 14px !important;
-            min-height: 110px !important;
-          }
-          .feature-icon {
-            font-size: 28px !important;
-            margin-bottom: 6px !important;
-          }
-          .feature-title {
-            font-size: 14px !important;
-          }
-          .feature-description {
-            font-size: 11px !important;
-          }
-        }
-        @media (hover: none) and (pointer: coarse) {
-          .feature-card {
-            min-height: 120px !important;
-          }
-          button {
-            min-height: 44px !important;
-          }
-        }
-      `}} />
+      <style dangerouslySetInnerHTML={{ __html: styleContent }} />
 
       <div className="dashboard-container" style={{
         minHeight: '100dvh',
@@ -268,42 +212,156 @@ export default function DashboardPage() {
             }}>
               功能中心
             </h1>
-            <p className="header-subtitle" style={{
-              margin: 0,
-              fontSize: '15px',
-              color: '#6b7280',
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px', 
+              flexWrap: 'wrap',
+              position: 'relative',
             }}>
-              {loading ? '加载中...' : userInfo?.company ? `${userInfo.company}` : '选择功能开始使用'}
-            </p>
+              <p className="header-subtitle" style={{
+                margin: 0,
+                fontSize: '15px',
+                color: '#6b7280',
+              }}>
+                {loading ? '加载中...' : userInfo?.company ? userInfo.company : '选择功能开始使用'}
+              </p>
+              {userInfo?.canSwitchCompany && userInfo.companies && userInfo.companies.length > 1 && (
+                <div className="company-picker-wrapper" style={{ position: 'relative' }}>
+                  <button
+                    className="company-switch-button"
+                    onClick={() => setShowCompanyPicker(!showCompanyPicker)}
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid #d1d5db',
+                      background: showCompanyPicker ? '#f0f4ff' : '#fff',
+                      color: '#667eea',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!showCompanyPicker) {
+                        e.currentTarget.style.borderColor = '#667eea';
+                        e.currentTarget.style.background = '#f0f4ff';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!showCompanyPicker) {
+                        e.currentTarget.style.borderColor = '#d1d5db';
+                        e.currentTarget.style.background = '#fff';
+                      }
+                    }}
+                  >
+                    🔄 切换公司
+                  </button>
+                  {showCompanyPicker && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      right: 0,
+                      marginTop: '8px',
+                      background: '#fff',
+                      borderRadius: '12px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                      border: '1px solid #e5e7eb',
+                      padding: '12px',
+                      minWidth: '200px',
+                      zIndex: 100,
+                    }}>
+                      <div style={{
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        color: '#374151',
+                        marginBottom: '8px',
+                        paddingBottom: '8px',
+                        borderBottom: '1px solid #e5e7eb',
+                      }}>
+                        选择公司
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {userInfo.companies.map((company) => (
+                          <button
+                            key={company.id}
+                            onClick={() => handleSwitchCompany(company.id)}
+                            disabled={switchingCompany || company.id === userInfo.currentCompanyId}
+                            style={{
+                              padding: '8px 12px',
+                              borderRadius: '8px',
+                              border: company.id === userInfo.currentCompanyId 
+                                ? '2px solid #667eea' 
+                                : '1px solid #e5e7eb',
+                              background: company.id === userInfo.currentCompanyId 
+                                ? '#f0f4ff' 
+                                : '#fff',
+                              color: company.id === userInfo.currentCompanyId 
+                                ? '#667eea' 
+                                : '#374151',
+                              fontSize: '13px',
+                              fontWeight: company.id === userInfo.currentCompanyId ? 600 : 500,
+                              cursor: switchingCompany || company.id === userInfo.currentCompanyId 
+                                ? 'not-allowed' 
+                                : 'pointer',
+                              transition: 'all 0.2s ease',
+                              textAlign: 'left',
+                              opacity: switchingCompany && company.id !== userInfo.currentCompanyId ? 0.6 : 1,
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!switchingCompany && company.id !== userInfo.currentCompanyId) {
+                                e.currentTarget.style.borderColor = '#667eea';
+                                e.currentTarget.style.background = '#f9fafb';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!switchingCompany && company.id !== userInfo.currentCompanyId) {
+                                e.currentTarget.style.borderColor = '#e5e7eb';
+                                e.currentTarget.style.background = '#fff';
+                              }
+                            }}
+                          >
+                            {company.id === userInfo.currentCompanyId && '✓ '}
+                            {company.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-          <button
-            className="logout-button"
-            onClick={handleLogout}
-            style={{
-              padding: '10px 20px',
-              borderRadius: '10px',
-              border: '1px solid #e5e7eb',
-              background: '#fff',
-              color: '#374151',
-              fontSize: '14px',
-              fontWeight: 500,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              whiteSpace: 'nowrap',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = '#ef4444';
-              e.currentTarget.style.color = '#ef4444';
-              e.currentTarget.style.background = '#fef2f2';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = '#e5e7eb';
-              e.currentTarget.style.color = '#374151';
-              e.currentTarget.style.background = '#fff';
-            }}
-          >
-            退出登录
-          </button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              className="logout-button"
+              onClick={handleLogout}
+              style={{
+                padding: '10px 20px',
+                borderRadius: '10px',
+                border: '1px solid #e5e7eb',
+                background: '#fff',
+                color: '#374151',
+                fontSize: '14px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#ef4444';
+                e.currentTarget.style.color = '#ef4444';
+                e.currentTarget.style.background = '#fef2f2';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#e5e7eb';
+                e.currentTarget.style.color = '#374151';
+                e.currentTarget.style.background = '#fff';
+              }}
+            >
+              退出登录
+            </button>
+          </div>
         </div>
 
         {/* 功能卡片网格 */}
