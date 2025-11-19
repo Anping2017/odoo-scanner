@@ -55,24 +55,112 @@ export async function GET(req: NextRequest) {
         searchDomain.push(['barcode', 'ilike', searchTerm]);
       } else if (searchMode === 'name') {
         // 按名称搜索模式：仅在产品名称中搜索（不搜索SKU和条码）
-        // 支持模糊匹配
-        searchDomain.push(['name', 'ilike', searchTerm]);
-      } else if (searchMode === 'sku') {
-        // 按SKU搜索模式：仅在SKU（default_code）中搜索（不搜索名称和条码）
-        // 支持模糊匹配
-        searchDomain.push(['default_code', 'ilike', searchTerm]);
-      } else {
-        // 模糊搜索模式：智能多关键词搜索
-        // 1. 支持引号包裹的精确短语（支持中英文引号）
+        // 使用与模糊搜索完全相同的逻辑，但只搜索name字段
+        // 1. 支持引号包裹的精确短语
         // 2. 多关键词自动用AND连接（每个关键词都要出现）
         // 3. 关键词顺序不重要，大小写不敏感
         
+        // 解析搜索词：分离引号短语和普通关键词
         // 辅助函数：检查字符是否是引号（支持中英文引号）
         const isQuote = (char: string) => {
           return char === '"' || char === '"' || char === '"';
         };
         
+        const parts: Array<{type: 'exact' | 'fuzzy', value: string}> = [];
+        let currentPart = '';
+        let inQuotes = false;
+        
+        for (let i = 0; i < searchTerm.length; i++) {
+          const char = searchTerm[i];
+          if (isQuote(char)) {
+            if (inQuotes) {
+              // 结束引号
+              if (currentPart.trim()) {
+                parts.push({ type: 'exact', value: currentPart.trim() });
+              }
+              currentPart = '';
+              inQuotes = false;
+            } else {
+              // 开始引号
+              if (currentPart.trim()) {
+                // 将引号前的部分作为模糊关键词处理
+                const fuzzyKeywords = currentPart.trim().split(/\s+/).filter(k => k.length > 0);
+                fuzzyKeywords.forEach(k => parts.push({ type: 'fuzzy', value: k }));
+              }
+              currentPart = '';
+              inQuotes = true;
+            }
+          } else {
+            currentPart += char;
+          }
+        }
+        
+        // 处理最后一部分
+        if (currentPart.trim()) {
+          if (inQuotes) {
+            parts.push({ type: 'exact', value: currentPart.trim() });
+          } else {
+            // 将剩余部分拆分为多个模糊关键词
+            const fuzzyKeywords = currentPart.trim().split(/\s+/).filter(k => k.length > 0);
+            fuzzyKeywords.forEach(k => parts.push({ type: 'fuzzy', value: k }));
+          }
+        }
+        
+        // 如果没有解析出任何部分，使用整个搜索词作为模糊搜索
+        if (parts.length === 0) {
+          const keywords = searchTerm.split(/\s+/).filter(k => k.length > 0);
+          keywords.forEach(k => parts.push({ type: 'fuzzy', value: k }));
+        }
+        
+        console.log(`[按名称搜索] 搜索词: "${searchTerm}"`);
+        console.log(`[按名称搜索] 搜索词长度: ${searchTerm.length}`);
+        console.log(`[按名称搜索] 搜索词字符编码:`, Array.from(searchTerm).map(c => `${c} (${c.charCodeAt(0)})`).join(', '));
+        console.log(`[按名称搜索] 解析结果:`, JSON.stringify(parts, null, 2));
+        
+        // 构建搜索条件：所有关键词都要在名称中出现（AND关系），不要求顺序和连续
+        // 注意：对于精确短语，ilike 会进行部分匹配，所以 "iphone 8" 可以匹配包含 "iphone 8" 的产品名称
+        if (parts.length === 1) {
+          // 单个关键词或短语：只在name字段中搜索
+          searchDomain.push(['name', 'ilike', parts[0].value]);
+          console.log(`[按名称搜索] 单个条件: name ilike "${parts[0].value}"`);
+        } else if (parts.length > 1) {
+          // 多个关键词：所有关键词都要在名称中出现（AND关系）
+          const nameGroup: any[] = [];
+          for (let i = 0; i < parts.length - 1; i++) {
+            nameGroup.push('&');
+          }
+          for (let i = 0; i < parts.length; i++) {
+            nameGroup.push(['name', 'ilike', parts[i].value]);
+          }
+          searchDomain.push(...nameGroup);
+          console.log(`[按名称搜索] 多个条件:`, nameGroup.map((item, idx) => {
+            if (item === '&') return 'AND';
+            if (Array.isArray(item)) return `name ilike "${item[2]}"`;
+            return item;
+          }).join(' '));
+        }
+        
+        console.log(`[按名称搜索] 构建的搜索域:`, JSON.stringify(searchDomain, null, 2));
+      } else if (searchMode === 'sku') {
+        // 按SKU搜索模式：仅在SKU（default_code）中搜索（不搜索名称和条码）
+        // 支持模糊匹配
+        searchDomain.push(['default_code', 'ilike', searchTerm]);
+      } else if (searchMode === 'lot') {
+        // 按Lot/Serial Number搜索模式：通过stock.lot搜索，然后找到关联的产品
+        // 这个模式需要特殊处理，先搜索Lot，然后获取产品ID列表
+        // 暂时先不添加到searchDomain，后面会单独处理
+      } else {
+        // 模糊搜索模式：智能多关键词搜索
+        // 1. 支持引号包裹的精确短语
+        // 2. 多关键词自动用AND连接（每个关键词都要出现）
+        // 3. 关键词顺序不重要，大小写不敏感
+        
         // 解析搜索词：分离引号短语和普通关键词
+        // 辅助函数：检查字符是否是引号（支持中英文引号）
+        const isQuote = (char: string) => {
+          return char === '"' || char === '"' || char === '"';
+        };
+        
         const parts: Array<{type: 'exact' | 'fuzzy', value: string}> = [];
         let currentPart = '';
         let inQuotes = false;
@@ -304,10 +392,72 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // 如果是Lot/Serial Number搜索模式，需要先搜索Lot，然后获取产品ID
+    // 注意：Lot/Serial搜索模式始终使用实时查询，不使用离线数据
+    let lotProductIds: number[] = [];
+    if (searchMode === 'lot' && search.trim()) {
+      try {
+        // 1. 搜索匹配的Lot/Serial Number
+        const lotData = await rpc('/web/dataset/call_kw', {
+          model: 'stock.lot',
+          method: 'search_read',
+          args: [
+            [['name', 'ilike', search.trim()]],
+            ['id', 'name']
+          ],
+          kwargs: {
+            limit: 1000, // 限制最大Lot数量
+            context: ctx
+          }
+        }, sessionId, base);
+        
+        if (lotData && Array.isArray(lotData) && lotData.length > 0) {
+          const lotIds = lotData.map((lot: any) => lot.id);
+          
+          // 2. 通过stock.quant找到关联的产品ID
+          const quantData = await rpc('/web/dataset/call_kw', {
+            model: 'stock.quant',
+            method: 'search_read',
+            args: [
+              [['lot_id', 'in', lotIds]],
+              ['product_id']
+            ],
+            kwargs: {
+              limit: 10000, // 限制最大数量
+              context: ctx
+            }
+          }, sessionId, base);
+          
+          if (quantData && Array.isArray(quantData) && quantData.length > 0) {
+            lotProductIds = [...new Set(quantData.map((q: any) => q.product_id?.[0]).filter(Boolean))];
+          }
+        }
+      } catch (e) {
+        console.error('Lot/Serial Number搜索失败:', e);
+      }
+      
+      // 如果没有找到匹配的产品，返回空结果
+      if (lotProductIds.length === 0) {
+        return NextResponse.json({
+          products: [],
+          total: 0,
+          page: page,
+          pageSize: pageSize,
+          totalPages: 0
+        });
+      }
+      
+      // 将产品ID添加到搜索条件中
+      searchDomain.push(['id', 'in', lotProductIds]);
+    }
+
     // 如果是只搜索模式，不进行筛选、排序、分页，直接返回搜索结果
     if (searchOnly) {
       // 只搜索模式：只应用搜索条件和数据库层面的筛选（POS类别、价格）
       // 不应用客户端筛选（库存筛选）、排序、分页
+      if (searchMode === 'name' && search.trim()) {
+        console.log(`[按名称搜索] 调用 Odoo search_read，搜索域:`, JSON.stringify(searchDomain.length > 0 ? searchDomain : [], null, 2));
+      }
       const productsData = await rpc('/web/dataset/call_kw', {
         model: 'product.product',
         method: 'search_read',
@@ -327,12 +477,18 @@ export async function GET(req: NextRequest) {
           ]
         ],
         kwargs: {
-          limit: Math.min(parseInt(pageSize.toString()) || 2000, 2000), // 优化：限制最大2000条，提升响应速度
+          limit: parseInt(pageSize.toString()) || 5000, // 使用传入的page_size，默认5000
           offset: 0,
           order: 'name asc', // 简单排序，客户端会重新排序
           context: ctx
         }
       }, sessionId, base);
+      if (searchMode === 'name' && search.trim()) {
+        console.log(`[按名称搜索] Odoo 返回产品数量: ${productsData?.length || 0}`);
+        if (productsData && productsData.length > 0) {
+          console.log(`[按名称搜索] 前5个产品名称:`, productsData.slice(0, 5).map((p: any) => p.name).join(', '));
+        }
+      }
 
       const products = productsData || [];
       if (products.length === 0) {
@@ -350,43 +506,42 @@ export async function GET(req: NextRequest) {
       const productIds = products.map((p: any) => p.id).filter(Boolean);
 
       // 如果有多公司环境，先获取属于当前公司的订单ID（用于过滤销售数量）
-      // 优化：在search_only模式下跳过订单ID查询，因为销售数量查询可能很慢
+      // 注意：必须确保与销售订单记录API使用相同的过滤逻辑
       let companyOrderIds: number[] = [];
-      // 在search_only模式下，跳过订单ID和销售/采购数量查询以提升性能
-      const skipSalesPurchaseData = true; // search_only模式下跳过这些慢查询
-      
-      if (!skipSalesPurchaseData && companyId) {
+      if (companyId) {
         try {
           const orderIdsResult = await rpc('/web/dataset/call_kw', {
             model: 'pos.order',
             method: 'search',
             args: [[['company_id', '=', companyId]]],
             kwargs: { 
-              limit: 10000, // 优化：减少limit，提升响应速度
+              limit: 50000, // 限制最大订单数，避免性能问题，与sales-history API保持一致
               context: ctx 
             }
-          }, sessionId, base).catch(() => []);
+          }, sessionId, base);
           
           if (Array.isArray(orderIdsResult) && orderIdsResult.length > 0) {
             companyOrderIds = orderIdsResult;
+          } else {
+            console.warn(`未找到属于公司 ${companyId} 的订单，销售数量可能包含其他公司的数据`);
           }
         } catch (e) {
-          // 忽略错误，继续执行（如果没有订单，companyOrderIds为空数组）
+          console.error('获取公司订单ID失败:', e);
         }
       }
 
-      // 并行获取辅助数据（自定义字段、POS类别、销售数量、采购数量）
-      // 优化：在search_only模式下跳过销售和采购数量查询
+      // 并行获取辅助数据（自定义字段、POS类别、销售数量、采购数量、Lot/Serial信息）
       const [
         customFieldsResult,
         posCategoryResult,
         salesQuantityResult,
-        purchaseQuantityResult
+        purchaseQuantityResult,
+        lotSerialResult
       ] = await Promise.allSettled([
         productIds.length > 0 ? rpc('/web/dataset/call_kw', {
           model: 'product.product',
           method: 'read',
-          args: [productIds, ['raytech_stock', 'raytech_p3']],
+          args: [productIds, ['raytech_stock', 'raytech_p3', 'raytech_web_name']],
           kwargs: { context: ctx }
         }, sessionId, base).catch(() => []) : Promise.resolve([]),
         (async () => {
@@ -439,17 +594,19 @@ export async function GET(req: NextRequest) {
           }
         })(),
         // 销售数量查询（带公司过滤，确保与销售订单记录一致）
-        // 优化：在search_only模式下跳过，提升响应速度
-        skipSalesPurchaseData ? Promise.resolve([]) : (async () => {
+        (async () => {
           if (productIds.length === 0) return [];
           try {
             // 构建查询条件：产品ID + 公司过滤（如果有多公司环境）
+            // 注意：必须与sales-history API使用相同的过滤逻辑
             const salesDomain: any[] = [['product_id', 'in', productIds]];
-            if (companyId && companyOrderIds.length > 0) {
-              salesDomain.push(['order_id', 'in', companyOrderIds]);
-            } else if (companyId && companyOrderIds.length === 0) {
-              // 如果有多公司环境但没有找到属于当前公司的订单，返回空结果
-              return [];
+            if (companyId) {
+              if (companyOrderIds.length > 0) {
+                salesDomain.push(['order_id', 'in', companyOrderIds]);
+              } else {
+                console.warn('公司订单ID为空，销售数量查询可能不准确');
+                return [];
+              }
             }
             
             const salesData = await rpc('/web/dataset/call_kw', {
@@ -467,16 +624,128 @@ export async function GET(req: NextRequest) {
             return [];
           }
         })(),
-        skipSalesPurchaseData ? Promise.resolve([]) : (productIds.length > 0 ? rpc('/web/dataset/call_kw', {
-          model: 'purchase.order.line',
-          method: 'read_group',
-          args: [
-            [['product_id', 'in', productIds]],
-            ['product_qty'],
-            ['product_id'],
-          ],
-          kwargs: { context: ctx }
-        }, sessionId, base).catch(() => []) : Promise.resolve([]))
+        // 采购数量查询（使用read_group，需要应用公司过滤）
+        // 注意：必须与采购订单记录API使用相同的过滤逻辑
+        (async () => {
+          if (productIds.length === 0) return [];
+          
+          // 构建查询条件：产品ID + 公司过滤（如果有多公司环境）
+          let purchaseDomain: any[] = [['product_id', 'in', productIds]];
+          
+          // 如果有多公司环境，需要获取属于当前公司的采购订单ID
+          let companyPurchaseOrderIds: number[] = [];
+          if (companyId) {
+            try {
+              const orderIdsResult = await rpc('/web/dataset/call_kw', {
+                model: 'purchase.order',
+                method: 'search',
+                args: [[['company_id', '=', companyId]]],
+                kwargs: { 
+                  limit: 50000, // 限制最大订单数，避免性能问题，与purchase-history API保持一致
+                  context: ctx 
+                }
+              }, sessionId, base);
+              
+              if (Array.isArray(orderIdsResult) && orderIdsResult.length > 0) {
+                companyPurchaseOrderIds = orderIdsResult;
+                purchaseDomain.push(['order_id', 'in', companyPurchaseOrderIds]);
+              } else {
+                console.warn(`未找到属于公司 ${companyId} 的采购订单，采购数量可能包含其他公司的数据`);
+                return [];
+              }
+            } catch (e) {
+              console.error('获取公司采购订单ID失败:', e);
+              return [];
+            }
+          }
+          
+          try {
+            return await rpc('/web/dataset/call_kw', {
+              model: 'purchase.order.line',
+              method: 'read_group',
+              args: [
+                purchaseDomain,
+                ['product_qty'],
+                ['product_id'],
+              ],
+              kwargs: { context: ctx }
+            }, sessionId, base);
+          } catch (e: any) {
+            console.warn('采购数量查询失败，返回空数组:', e?.message);
+            return [];
+          }
+        })(),
+        // 获取Lot/Serial信息（仅限有Lot/Serial的产品，只在lot搜索模式下获取）
+        (async () => {
+          // 只在lot搜索模式下获取Lot/Serial信息
+          if (searchMode !== 'lot' || productIds.length === 0) return new Map();
+          try {
+            // 通过stock.quant获取有Lot/Serial的产品
+            const quantData = await rpc('/web/dataset/call_kw', {
+              model: 'stock.quant',
+              method: 'search_read',
+              args: [
+                [
+                  ['product_id', 'in', productIds],
+                  ['lot_id', '!=', false],
+                  ['quantity', '>', 0]
+                ],
+                ['product_id', 'lot_id', 'quantity', 'location_id']
+              ],
+              kwargs: {
+                limit: 10000,
+                context: ctx
+              }
+            }, sessionId, base);
+            
+            if (!quantData || !Array.isArray(quantData)) return new Map();
+            
+            // 获取所有Lot ID
+            const lotIds = [...new Set(quantData.map((q: any) => q.lot_id?.[0]).filter(Boolean))];
+            if (lotIds.length === 0) return new Map();
+            
+            // 获取Lot详细信息
+            const lotData = await rpc('/web/dataset/call_kw', {
+              model: 'stock.lot',
+              method: 'read',
+              args: [lotIds, ['id', 'name']],
+              kwargs: { context: ctx }
+            }, sessionId, base);
+            
+            if (!lotData || !Array.isArray(lotData)) return new Map();
+            
+            const lotMap = new Map(lotData.map((l: any) => [l.id, l.name]));
+            
+            // 按产品ID分组Lot/Serial信息
+            const lotSerialMap = new Map<number, Array<{lot_id: number, lot_name: string, quantity: number, location_name: string}>>();
+            
+            quantData.forEach((q: any) => {
+              const productId = q.product_id?.[0];
+              const lotId = q.lot_id?.[0];
+              if (!productId || !lotId) return;
+              
+              const lotName = lotMap.get(lotId) || `LOT-${lotId}`;
+              const quantity = q.quantity || 0;
+              const locationName = q.location_id?.[1] || '未知位置';
+              
+              if (!lotSerialMap.has(productId)) {
+                lotSerialMap.set(productId, []);
+              }
+              
+              lotSerialMap.get(productId)!.push({
+                lot_id: lotId,
+                lot_name: lotName,
+                quantity: quantity,
+                location_name: locationName
+              });
+            });
+            
+            return lotSerialMap;
+          } catch (e) {
+            console.error('获取Lot/Serial信息失败:', e);
+            return new Map();
+          }
+        })()
       ]);
 
       // 处理结果并组合数据
@@ -485,7 +754,8 @@ export async function GET(req: NextRequest) {
         customFieldsResult.value.forEach((p: any) => {
           customFieldsMap.set(p.id, {
             raytech_stock: p.raytech_stock || null,
-            raytech_p3: p.raytech_p3 || null
+            raytech_p3: p.raytech_p3 || null,
+            raytech_web_name: p.raytech_web_name || null
           });
         });
       }
@@ -531,6 +801,12 @@ export async function GET(req: NextRequest) {
         });
       }
 
+      // 处理Lot/Serial信息结果
+      let lotSerialMap = new Map<number, Array<{lot_id: number, lot_name: string, quantity: number, location_name: string}>>();
+      if (lotSerialResult.status === 'fulfilled' && lotSerialResult.value instanceof Map) {
+        lotSerialMap = lotSerialResult.value;
+      }
+
       // 组合产品数据
       const productsList = products.map((product: any) => {
         const customFields = customFieldsMap.get(product.id) || {};
@@ -550,10 +826,13 @@ export async function GET(req: NextRequest) {
           standard_price: product.standard_price || 0,
           raytech_stock: customFields.raytech_stock ?? null,
           raytech_p3: customFields.raytech_p3 ?? null,
+          raytech_web_name: customFields.raytech_web_name ?? null,
           image_128: product.image_128 || null,
           pos_category: posCategory,
           sales_quantity: salesQty,
-          purchase_quantity: purchaseQty
+          purchase_quantity: purchaseQty,
+          // 只在lot搜索模式下添加lot_serial_numbers字段
+          ...(searchMode === 'lot' ? { lot_serial_numbers: lotSerialMap.get(product.id) || undefined } : {})
         };
       });
 
@@ -595,8 +874,8 @@ export async function GET(req: NextRequest) {
         ]
       ],
       kwargs: {
-        // 为了全产品排序，先获取所有数据（优化：限制5000以提升响应速度）
-        limit: 5000,
+        // 为了全产品排序，先获取所有数据（限制10000以避免性能问题）
+        limit: 10000,
         offset: 0,
         order: (() => {
           // 对于Odoo直接支持的字段，在Odoo层面排序
@@ -636,6 +915,7 @@ export async function GET(req: NextRequest) {
     const productIds = products.map((p: any) => p.id).filter(Boolean);
 
     // 如果有多公司环境，先获取属于当前公司的订单ID（用于过滤销售数量）
+    // 注意：必须确保与销售订单记录API使用相同的过滤逻辑
     let companyOrderIds: number[] = [];
     if (companyId) {
       try {
@@ -644,26 +924,34 @@ export async function GET(req: NextRequest) {
           method: 'search',
           args: [[['company_id', '=', companyId]]],
           kwargs: { 
-            limit: 10000, // 优化：减少limit，提升响应速度
+            limit: 50000, // 限制最大订单数，避免性能问题，与sales-history API保持一致
             context: ctx 
           }
-        }, sessionId, base).catch(() => []);
+        }, sessionId, base);
         
         if (Array.isArray(orderIdsResult) && orderIdsResult.length > 0) {
           companyOrderIds = orderIdsResult;
+        } else {
+          // 如果没有找到属于当前公司的订单，记录警告但不返回空结果
+          // 因为可能是查询失败，而不是真的没有订单
+          console.warn(`未找到属于公司 ${companyId} 的订单，销售数量可能包含其他公司的数据`);
         }
       } catch (e) {
-        // 忽略错误，继续执行（如果没有订单，companyOrderIds为空数组）
+        // 查询失败时记录错误，但不阻止继续执行
+        // 这样即使查询失败，也能返回部分数据
+        console.error('获取公司订单ID失败:', e);
       }
     }
 
-    // 4-7. 并行获取所有辅助数据（自定义字段、POS类别、销售数量、采购数量）
+    // 4-8. 并行获取所有辅助数据（自定义字段、POS类别、销售数量、采购数量、Lot/Serial信息）
+    // 注意：Lot/Serial信息只在lot搜索模式下获取
     // 使用Promise.all并行执行，大幅提升性能
     const [
       customFieldsResult,
       posCategoryResult,
       salesQuantityResult,
-      purchaseQuantityResult
+      purchaseQuantityResult,
+      lotSerialResult
     ] = await Promise.allSettled([
       // 4. 获取自定义字段（raytech_stock, raytech_p3）
       productIds.length > 0 ? rpc('/web/dataset/call_kw', {
@@ -727,18 +1015,99 @@ export async function GET(req: NextRequest) {
         }
       })(),
 
-      // 6. 批量获取销售数量（优化：优先使用read_group，失败则用search_read）
+      // 6. 获取Lot/Serial信息（仅限有Lot/Serial的产品，只在lot搜索模式下获取）
+      (async () => {
+        // 只在lot搜索模式下获取Lot/Serial信息
+        if (searchMode !== 'lot' || productIds.length === 0) return new Map();
+        try {
+          // 通过stock.quant获取有Lot/Serial的产品
+          const quantData = await rpc('/web/dataset/call_kw', {
+            model: 'stock.quant',
+            method: 'search_read',
+            args: [
+              [
+                ['product_id', 'in', productIds],
+                ['lot_id', '!=', false],
+                ['quantity', '>', 0]
+              ],
+              ['product_id', 'lot_id', 'quantity', 'location_id']
+            ],
+            kwargs: {
+              limit: 10000,
+              context: ctx
+            }
+          }, sessionId, base);
+          
+          if (!quantData || !Array.isArray(quantData)) return new Map();
+          
+          // 获取所有Lot ID
+          const lotIds = [...new Set(quantData.map((q: any) => q.lot_id?.[0]).filter(Boolean))];
+          if (lotIds.length === 0) return new Map();
+          
+          // 获取Lot详细信息
+          const lotData = await rpc('/web/dataset/call_kw', {
+            model: 'stock.lot',
+            method: 'read',
+            args: [lotIds, ['id', 'name']],
+            kwargs: { context: ctx }
+          }, sessionId, base);
+          
+          if (!lotData || !Array.isArray(lotData)) return new Map();
+          
+          const lotMap = new Map(lotData.map((l: any) => [l.id, l.name]));
+          
+          // 按产品ID分组Lot/Serial信息
+          const lotSerialMap = new Map<number, Array<{lot_id: number, lot_name: string, quantity: number, location_name: string}>>();
+          
+          quantData.forEach((q: any) => {
+            const productId = q.product_id?.[0];
+            const lotId = q.lot_id?.[0];
+            if (!productId || !lotId) return;
+            
+            const lotName = lotMap.get(lotId) || `LOT-${lotId}`;
+            const quantity = q.quantity || 0;
+            const locationName = q.location_id?.[1] || '未知位置';
+            
+            if (!lotSerialMap.has(productId)) {
+              lotSerialMap.set(productId, []);
+            }
+            
+            lotSerialMap.get(productId)!.push({
+              lot_id: lotId,
+              lot_name: lotName,
+              quantity: quantity,
+              location_name: locationName
+            });
+          });
+          
+          return lotSerialMap;
+        } catch (e) {
+          console.error('获取Lot/Serial信息失败:', e);
+          return new Map();
+        }
+      })(),
+
+      // 7. 批量获取销售数量（优化：优先使用read_group，失败则用search_read）
       // 注意：需要应用公司过滤，确保与销售订单列表一致
       (async () => {
         if (productIds.length === 0) return [];
         
         // 构建查询条件：产品ID + 公司过滤（如果有多公司环境）
+        // 注意：必须与sales-history API使用相同的过滤逻辑
         let salesDomain: any[] = [['product_id', 'in', productIds]];
-        if (companyId && companyOrderIds.length > 0) {
-          salesDomain.push(['order_id', 'in', companyOrderIds]);
-        } else if (companyId && companyOrderIds.length === 0) {
-          // 如果有多公司环境但没有找到属于当前公司的订单，返回空结果
-          return [];
+        if (companyId) {
+          if (companyOrderIds.length > 0) {
+            // 如果成功获取了公司订单ID，使用订单ID过滤
+            salesDomain.push(['order_id', 'in', companyOrderIds]);
+          } else {
+            // 如果没有获取到公司订单ID（可能是查询失败），尝试使用公司ID直接过滤
+            // 注意：pos.order.line模型可能没有直接的company_id字段，需要通过order_id关联
+            // 如果order_id.company_id过滤不可用，这里返回空结果以确保数据一致性
+            // 但实际上，如果companyOrderIds为空，可能是查询失败，应该记录警告
+            console.warn('公司订单ID为空，销售数量查询可能不准确');
+            // 返回空结果，确保与sales-history API行为一致
+            return [];
+          }
         }
         
         try {
@@ -790,17 +1159,59 @@ export async function GET(req: NextRequest) {
         }
       })(),
 
-      // 7. 批量获取采购数量（使用read_group）
-      productIds.length > 0 ? rpc('/web/dataset/call_kw', {
-        model: 'purchase.order.line',
-        method: 'read_group',
-        args: [
-          [['product_id', 'in', productIds]],
-          ['product_qty'],
-          ['product_id'],
-        ],
-        kwargs: { context: ctx }
-      }, sessionId, base).catch(() => []) : Promise.resolve([])
+      // 7. 批量获取采购数量（使用read_group，需要应用公司过滤）
+      // 注意：必须与采购订单记录API使用相同的过滤逻辑
+      (async () => {
+        if (productIds.length === 0) return [];
+        
+        // 构建查询条件：产品ID + 公司过滤（如果有多公司环境）
+        let purchaseDomain: any[] = [['product_id', 'in', productIds]];
+        
+        // 如果有多公司环境，需要获取属于当前公司的采购订单ID
+        let companyPurchaseOrderIds: number[] = [];
+        if (companyId) {
+          try {
+            const orderIdsResult = await rpc('/web/dataset/call_kw', {
+              model: 'purchase.order',
+              method: 'search',
+              args: [[['company_id', '=', companyId]]],
+              kwargs: { 
+                limit: 50000, // 限制最大订单数，避免性能问题，与purchase-history API保持一致
+                context: ctx 
+              }
+            }, sessionId, base);
+            
+            if (Array.isArray(orderIdsResult) && orderIdsResult.length > 0) {
+              companyPurchaseOrderIds = orderIdsResult;
+              purchaseDomain.push(['order_id', 'in', companyPurchaseOrderIds]);
+            } else {
+              console.warn(`未找到属于公司 ${companyId} 的采购订单，采购数量可能包含其他公司的数据`);
+              // 返回空结果，确保与purchase-history API行为一致
+              return [];
+            }
+          } catch (e) {
+            console.error('获取公司采购订单ID失败:', e);
+            // 查询失败时返回空结果，确保数据一致性
+            return [];
+          }
+        }
+        
+        try {
+          return await rpc('/web/dataset/call_kw', {
+            model: 'purchase.order.line',
+            method: 'read_group',
+            args: [
+              purchaseDomain,
+              ['product_qty'],
+              ['product_id'],
+            ],
+            kwargs: { context: ctx }
+          }, sessionId, base);
+        } catch (e: any) {
+          console.warn('采购数量查询失败，返回空数组:', e?.message);
+          return [];
+        }
+      })()
     ]);
 
     // 处理自定义字段结果
@@ -809,7 +1220,8 @@ export async function GET(req: NextRequest) {
       customFieldsResult.value.forEach((p: any) => {
         customFieldsMap.set(p.id, {
           raytech_stock: p.raytech_stock || null,
-          raytech_p3: p.raytech_p3 || null
+          raytech_p3: p.raytech_p3 || null,
+          raytech_web_name: p.raytech_web_name || null
         });
       });
     }
@@ -868,6 +1280,12 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // 处理Lot/Serial信息结果
+    let lotSerialMap = new Map<number, Array<{lot_id: number, lot_name: string, quantity: number, location_name: string}>>();
+    if (lotSerialResult.status === 'fulfilled' && lotSerialResult.value instanceof Map) {
+      lotSerialMap = lotSerialResult.value;
+    }
+
     // 8. 组合数据
     // 注意：由于我们先获取所有数据并排序后再分页，finalTotal应该基于实际获取的产品数量
     let productsList = products.map((product: any) => {
@@ -893,10 +1311,13 @@ export async function GET(req: NextRequest) {
         standard_price: product.standard_price || 0,
         raytech_stock: customFields.raytech_stock || null,
         raytech_p3: customFields.raytech_p3 || null,
+        raytech_web_name: customFields.raytech_web_name || null,
         image_128: product.image_128 || null,
         pos_category: productPosCategory,
         sales_quantity: salesQty,
-        purchase_quantity: purchaseQty
+        purchase_quantity: purchaseQty,
+        // 只在lot搜索模式下添加lot_serial_numbers字段
+        ...(searchMode === 'lot' ? { lot_serial_numbers: lotSerialMap.get(product.id) || undefined } : {})
       };
     }).filter((p: any) => p !== null); // 过滤掉Unset类别的产品
     
@@ -904,30 +1325,117 @@ export async function GET(req: NextRequest) {
     // 如果获取的产品数量少于总数，说明达到了limit限制，使用实际获取的数量
     let finalTotal = productsList.length < totalCount ? productsList.length : totalCount;
 
-     // 8.4. 精确搜索模式下的结果过滤（确保包含匹配，不区分大小写）
+     // 8.4. 精确搜索模式下的结果过滤（确保完全匹配，不区分大小写）
      // 注意：过滤应该在排序和分页之前进行
      if (searchMode === 'exact' && search.trim()) {
        const exactTerm = search.trim().toLowerCase();
        productsList = productsList.filter((p: any) => {
-         const nameLower = p.name?.toLowerCase() || '';
-         const codeLower = p.default_code?.toLowerCase() || '';
-         const barcodeLower = p.barcode?.toLowerCase() || '';
-         // 精确搜索：搜索词必须作为完整子字符串出现在名称、SKU或条码中
-         const nameMatch = nameLower.includes(exactTerm);
-         const codeMatch = codeLower.includes(exactTerm);
-         const barcodeMatch = barcodeLower.includes(exactTerm);
+         const nameMatch = p.name?.toLowerCase() === exactTerm;
+         const codeMatch = p.default_code?.toLowerCase() === exactTerm;
+         const barcodeMatch = p.barcode?.toLowerCase() === exactTerm;
          return nameMatch || codeMatch || barcodeMatch;
        });
        // 更新总数
        finalTotal = productsList.length;
      }
      
-     // 8.4.1. 按名称搜索模式：已经在Odoo层面完成，无需额外过滤
-     // 因为只搜索name字段，所以结果已经是按名称匹配的
+     // 8.4.1. 按名称搜索模式下的引号短语过滤（确保精确短语完全匹配，与模糊搜索逻辑一致）
+     if (searchMode === 'name' && search.trim()) {
+       const searchTerm = search.trim();
+       
+       // 辅助函数：检查字符是否是引号（支持中英文引号）
+       const isQuote = (char: string) => {
+         return char === '"' || char === '"' || char === '"';
+       };
+       
+       // 解析搜索词：分离引号短语和普通关键词（与构建搜索域时的逻辑一致）
+       const parts: Array<{type: 'exact' | 'fuzzy', value: string}> = [];
+       let currentPart = '';
+       let inQuotes = false;
+       
+       for (let i = 0; i < searchTerm.length; i++) {
+         const char = searchTerm[i];
+         if (isQuote(char)) {
+           if (inQuotes) {
+             // 结束引号
+             if (currentPart.trim()) {
+               parts.push({ type: 'exact', value: currentPart.trim() });
+             }
+             currentPart = '';
+             inQuotes = false;
+           } else {
+             // 开始引号
+             if (currentPart.trim()) {
+               // 将引号前的部分作为模糊关键词处理
+               const fuzzyKeywords = currentPart.trim().split(/\s+/).filter(k => k.length > 0);
+               fuzzyKeywords.forEach(k => parts.push({ type: 'fuzzy', value: k }));
+             }
+             currentPart = '';
+             inQuotes = true;
+           }
+         } else {
+           currentPart += char;
+         }
+       }
+       
+       // 处理最后一部分
+       if (currentPart.trim()) {
+         if (inQuotes) {
+           parts.push({ type: 'exact', value: currentPart.trim() });
+         } else {
+           // 将剩余部分拆分为多个模糊关键词
+           const fuzzyKeywords = currentPart.trim().split(/\s+/).filter(k => k.length > 0);
+           fuzzyKeywords.forEach(k => parts.push({ type: 'fuzzy', value: k }));
+         }
+       }
+       
+       // 如果没有解析出任何部分，使用整个搜索词作为模糊搜索
+       if (parts.length === 0) {
+         const keywords = searchTerm.split(/\s+/).filter(k => k.length > 0);
+         keywords.forEach(k => parts.push({ type: 'fuzzy', value: k }));
+       }
+       
+       console.log(`[按名称搜索过滤] 搜索词: "${searchTerm}", 解析结果:`, JSON.stringify(parts, null, 2));
+       console.log(`[按名称搜索过滤] 过滤前产品数量: ${productsList.length}`);
+       
+       // 过滤结果：确保所有部分都在名称中正确匹配（与模糊搜索逻辑一致）
+       if (parts.length > 0) {
+         const beforeCount = productsList.length;
+         productsList = productsList.filter((p: any) => {
+           const nameLower = (p.name || '').toLowerCase();
+           const allMatch = parts.every(part => {
+             const partValueLower = part.value.toLowerCase();
+             if (part.type === 'exact') {
+               // 精确短语：必须作为完整子字符串出现在名称中
+               const matches = nameLower.includes(partValueLower);
+               if (!matches) {
+                 console.log(`[按名称搜索过滤] 产品 "${p.name}" 不匹配精确短语 "${part.value}"`);
+               }
+               return matches;
+             } else {
+               // 模糊关键词：在名称中出现即可
+               const matches = nameLower.includes(partValueLower);
+               if (!matches) {
+                 console.log(`[按名称搜索过滤] 产品 "${p.name}" 不匹配模糊关键词 "${part.value}"`);
+               }
+               return matches;
+             }
+           });
+           if (allMatch) {
+             console.log(`[按名称搜索过滤] 产品 "${p.name}" 匹配所有条件`);
+           }
+           return allMatch;
+         });
+         console.log(`[按名称搜索过滤] 过滤后产品数量: ${productsList.length} (过滤前: ${beforeCount})`);
+         // 更新总数
+         finalTotal = productsList.length;
+       }
+     }
 
-    // 8.4.2. 模糊搜索模式下的引号短语过滤（确保精确短语包含匹配，不区分大小写）
+    // 8.4.2. 模糊搜索模式下的引号短语过滤（确保精确短语完全匹配）
     if (searchMode === 'fuzzy' && search.trim()) {
       const searchTerm = search.trim();
+      
       // 辅助函数：检查字符是否是引号（支持中英文引号）
       const isQuote = (char: string) => {
         return char === '"' || char === '"' || char === '"';
@@ -956,18 +1464,15 @@ export async function GET(req: NextRequest) {
         }
       }
       
-      // 如果有精确短语，过滤结果
+      // 如果有精确短语，过滤结果确保精确短语完全匹配
       if (exactPhrases.length > 0) {
         productsList = productsList.filter((p: any) => {
+          const nameLower = (p.name || '').toLowerCase();
+          const codeLower = (p.default_code || '').toLowerCase();
+          const barcodeLower = (p.barcode || '').toLowerCase();
           return exactPhrases.every(phrase => {
-            const nameLower = p.name?.toLowerCase() || '';
-            const codeLower = p.default_code?.toLowerCase() || '';
-            const barcodeLower = p.barcode?.toLowerCase() || '';
-            // 引号短语：必须作为完整子字符串出现在名称、SKU或条码中
-            const nameMatch = nameLower.includes(phrase);
-            const codeMatch = codeLower.includes(phrase);
-            const barcodeMatch = barcodeLower.includes(phrase);
-            return nameMatch || codeMatch || barcodeMatch;
+            // 精确短语必须作为完整子字符串出现在名称、SKU或条码中
+            return nameLower.includes(phrase) || codeLower.includes(phrase) || barcodeLower.includes(phrase);
           });
         });
         // 更新总数
@@ -1039,6 +1544,7 @@ export async function GET(req: NextRequest) {
         const allTemplateIds = [...new Set(allProductsForFilter.map((p: any) => p.product_tmpl_id?.[0]).filter(Boolean))];
 
         // 如果有多公司环境，先获取属于当前公司的订单ID（用于过滤销售数量）
+        // 注意：必须确保与销售订单记录API使用相同的过滤逻辑
         let companyOrderIds: number[] = [];
         if (companyId) {
           try {
@@ -1047,16 +1553,18 @@ export async function GET(req: NextRequest) {
               method: 'search',
               args: [[['company_id', '=', companyId]]],
               kwargs: { 
-                limit: 10000, // 优化：减少limit，提升响应速度
+                limit: 50000, // 限制最大订单数，避免性能问题，与sales-history API保持一致
                 context: ctx 
               }
-            }, sessionId, base).catch(() => []);
+            }, sessionId, base);
             
             if (Array.isArray(orderIdsResult) && orderIdsResult.length > 0) {
               companyOrderIds = orderIdsResult;
+            } else {
+              console.warn(`未找到属于公司 ${companyId} 的订单，销售数量可能包含其他公司的数据`);
             }
           } catch (e) {
-            // 忽略错误，继续执行（如果没有订单，companyOrderIds为空数组）
+            console.error('获取公司订单ID失败:', e);
           }
         }
 
@@ -1128,12 +1636,15 @@ export async function GET(req: NextRequest) {
           // 注意：需要应用公司过滤，确保与销售订单列表一致
           (async () => {
             // 构建查询条件：产品ID + 公司过滤（如果有多公司环境）
+            // 注意：必须与sales-history API使用相同的过滤逻辑
             let salesDomain: any[] = [['product_id', 'in', allProductIds]];
-            if (companyId && companyOrderIds.length > 0) {
-              salesDomain.push(['order_id', 'in', companyOrderIds]);
-            } else if (companyId && companyOrderIds.length === 0) {
-              // 如果有多公司环境但没有找到属于当前公司的订单，返回空结果
-              return [];
+            if (companyId) {
+              if (companyOrderIds.length > 0) {
+                salesDomain.push(['order_id', 'in', companyOrderIds]);
+              } else {
+                console.warn('公司订单ID为空，销售数量查询可能不准确');
+                return [];
+              }
             }
             
             try {
@@ -1183,17 +1694,58 @@ export async function GET(req: NextRequest) {
               }
             }
           })(),
-          // 获取采购数量
-          rpc('/web/dataset/call_kw', {
-            model: 'purchase.order.line',
-            method: 'read_group',
-            args: [
-              [['product_id', 'in', allProductIds]],
-              ['product_qty'],
-              ['product_id'],
-            ],
-            kwargs: { context: ctx }
-          }, sessionId, base).catch(() => [])
+          // 获取采购数量（需要应用公司过滤）
+          // 注意：必须与采购订单记录API使用相同的过滤逻辑
+          (async () => {
+            if (allProductIds.length === 0) return [];
+            
+            // 构建查询条件：产品ID + 公司过滤（如果有多公司环境）
+            let purchaseDomain: any[] = [['product_id', 'in', allProductIds]];
+            
+            // 如果有多公司环境，需要获取属于当前公司的采购订单ID
+            // 注意：companyOrderIds是销售订单ID，需要单独获取采购订单ID
+            let companyPurchaseOrderIds: number[] = [];
+            if (companyId) {
+              try {
+                const orderIdsResult = await rpc('/web/dataset/call_kw', {
+                  model: 'purchase.order',
+                  method: 'search',
+                  args: [[['company_id', '=', companyId]]],
+                  kwargs: { 
+                    limit: 50000, // 限制最大订单数，避免性能问题，与purchase-history API保持一致
+                    context: ctx 
+                  }
+                }, sessionId, base);
+                
+                if (Array.isArray(orderIdsResult) && orderIdsResult.length > 0) {
+                  companyPurchaseOrderIds = orderIdsResult;
+                  purchaseDomain.push(['order_id', 'in', companyPurchaseOrderIds]);
+                } else {
+                  console.warn(`未找到属于公司 ${companyId} 的采购订单，采购数量可能包含其他公司的数据`);
+                  return [];
+                }
+              } catch (e) {
+                console.error('获取公司采购订单ID失败:', e);
+                return [];
+              }
+            }
+            
+            try {
+              return await rpc('/web/dataset/call_kw', {
+                model: 'purchase.order.line',
+                method: 'read_group',
+                args: [
+                  purchaseDomain,
+                  ['product_qty'],
+                  ['product_id'],
+                ],
+                kwargs: { context: ctx }
+              }, sessionId, base);
+            } catch (e: any) {
+              console.warn('采购数量查询失败，返回空数组:', e?.message);
+              return [];
+            }
+          })()
         ]);
 
         // 处理自定义字段结果
@@ -1202,7 +1754,8 @@ export async function GET(req: NextRequest) {
           allCustomFieldsResult.value.forEach((p: any) => {
             allCustomFieldsMap.set(p.id, {
               raytech_stock: p.raytech_stock || null,
-              raytech_p3: p.raytech_p3 || null
+              raytech_p3: p.raytech_p3 || null,
+              raytech_web_name: p.raytech_web_name || null
             });
           });
         }
@@ -1289,13 +1842,9 @@ export async function GET(req: NextRequest) {
         if (searchMode === 'exact' && search.trim()) {
           const exactTerm = search.trim().toLowerCase();
           allProductsList = allProductsList.filter((p: any) => {
-            const nameLower = p.name?.toLowerCase() || '';
-            const codeLower = p.default_code?.toLowerCase() || '';
-            const barcodeLower = p.barcode?.toLowerCase() || '';
-            // 精确搜索：搜索词必须作为完整子字符串出现在名称、SKU或条码中
-            const nameMatch = nameLower.includes(exactTerm);
-            const codeMatch = codeLower.includes(exactTerm);
-            const barcodeMatch = barcodeLower.includes(exactTerm);
+            const nameMatch = p.name?.toLowerCase() === exactTerm;
+            const codeMatch = p.default_code?.toLowerCase() === exactTerm;
+            const barcodeMatch = p.barcode?.toLowerCase() === exactTerm;
             return nameMatch || codeMatch || barcodeMatch;
           });
         }
@@ -1303,18 +1852,13 @@ export async function GET(req: NextRequest) {
         // 应用模糊搜索的引号短语过滤
         if (searchMode === 'fuzzy' && search.trim()) {
           const searchTerm = search.trim();
-          // 辅助函数：检查字符是否是引号（支持中英文引号）
-          const isQuote = (char: string) => {
-            return char === '"' || char === '"' || char === '"';
-          };
-          
           const exactPhrases: string[] = [];
           let currentPart = '';
           let inQuotes = false;
           
           for (let i = 0; i < searchTerm.length; i++) {
             const char = searchTerm[i];
-            if (isQuote(char)) {
+            if (char === '"') {
               if (inQuotes) {
                 if (currentPart.trim()) {
                   exactPhrases.push(currentPart.trim().toLowerCase());
@@ -1333,13 +1877,9 @@ export async function GET(req: NextRequest) {
           if (exactPhrases.length > 0) {
             allProductsList = allProductsList.filter((p: any) => {
               return exactPhrases.every(phrase => {
-                const nameLower = p.name?.toLowerCase() || '';
-                const codeLower = p.default_code?.toLowerCase() || '';
-                const barcodeLower = p.barcode?.toLowerCase() || '';
-                // 引号短语：必须作为完整子字符串出现在名称、SKU或条码中
-                const nameMatch = nameLower.includes(phrase);
-                const codeMatch = codeLower.includes(phrase);
-                const barcodeMatch = barcodeLower.includes(phrase);
+                const nameMatch = p.name?.toLowerCase() === phrase;
+                const codeMatch = p.default_code?.toLowerCase() === phrase;
+                const barcodeMatch = p.barcode?.toLowerCase() === phrase;
                 return nameMatch || codeMatch || barcodeMatch;
               });
             });

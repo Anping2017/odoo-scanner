@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
         method: 'search_read',
         args: [
           lineDomain,
-          ['id', 'order_id', 'product_id', 'qty', 'price_unit', 'price_subtotal']
+          ['id', 'order_id', 'product_id', 'qty', 'price_unit', 'price_subtotal', 'price_subtotal_incl']
         ],
         kwargs: { 
           limit: pageSize,
@@ -136,7 +136,8 @@ export async function GET(req: NextRequest) {
                   customer: order?.partner_id?.[1] || 'POS客户',
                   quantity: sale.qty,
                   unit_price: sale.price_unit,
-                  total_amount: sale.price_subtotal,
+                  total_amount: sale.price_subtotal_incl || sale.price_subtotal, // 优先使用税后价格
+                  total_amount_before_tax: sale.price_subtotal, // 税前价格
                   product_id: sale.product_id?.[0] || sale.product_id,
                   type: 'POS'
                 };

@@ -129,6 +129,7 @@ export async function GET(req: NextRequest) {
     }
 
     // 用 stock.move 读取完成的移动作为历史（带分页）
+    // 需要获取更详细的信息，包括变动类型和库存余额
     const offset = (page - 1) * pageSize;
     const moveIds = await rpc(base, '/web/dataset/call_kw', {
       model: 'stock.move',
@@ -136,27 +137,157 @@ export async function GET(req: NextRequest) {
       args: [[
         ['product_id', '=', pid],
         ['state', '=', 'done'],
-      ], ['id', 'date', 'product_uom_qty', 'product_uom', 'location_id', 'location_dest_id', 'reference', 'create_uid', 'write_uid']],
+      ], [
+        'id', 
+        'date', 
+        'product_uom_qty', 
+        'product_uom', 
+        'location_id', 
+        'location_dest_id', 
+        'reference', 
+        'create_uid', 
+        'write_uid',
+        'picking_id',
+        'origin',
+        'name'
+      ]],
       kwargs: { 
         limit: pageSize, 
         offset: offset,
-        order: 'date desc', 
+        order: 'date desc, id desc', 
         context 
       },
     }, cookieStr);
 
     const moves = moveIds?.result || [];
-    const out = moves.map((m: any) => ({
-      id: m.id,
-      date: m.date,
-      qty_done: m.product_uom_qty,
-      uom: m.product_uom?.[1],
-      from: m.location_id?.[1],
-      to: m.location_dest_id?.[1],
-      ref: m.reference,
-      created_by: m.create_uid?.[1],
-      updated_by: m.write_uid?.[1],
-    }));
+    
+    // 获取当前产品的库存信息（用于计算余额）
+    let currentStock = 0;
+    try {
+      const productData = await rpc(base, '/web/dataset/call_kw', {
+        model: 'product.product',
+        method: 'read',
+        args: [[pid], ['qty_available']],
+        kwargs: { context },
+      }, cookieStr);
+      if (productData?.result?.[0]) {
+        currentStock = productData.result[0].qty_available || 0;
+      }
+    } catch (e) {
+      console.log('获取当前库存失败:', e);
+    }
+
+    // 获取库位信息，用于判断入库/出库
+    // 需要获取所有涉及的库位类型
+    const locationIds = new Set<number>();
+    moves.forEach((m: any) => {
+      if (m.location_id?.[0]) locationIds.add(m.location_id[0]);
+      if (m.location_dest_id?.[0]) locationIds.add(m.location_dest_id[0]);
+    });
+    
+    let locationUsageMap = new Map<number, string>();
+    if (locationIds.size > 0) {
+      try {
+        const locationData = await rpc(base, '/web/dataset/call_kw', {
+          model: 'stock.location',
+          method: 'read',
+          args: [Array.from(locationIds), ['id', 'usage', 'name']],
+          kwargs: { context },
+        }, cookieStr);
+        
+        if (locationData?.result && Array.isArray(locationData.result)) {
+          locationData.result.forEach((loc: any) => {
+            locationUsageMap.set(loc.id, loc.usage || 'internal');
+          });
+        }
+      } catch (e) {
+        console.log('获取库位信息失败:', e);
+      }
+    }
+    
+    // 处理移动记录，计算库存余额
+    // 按日期正序排列（从最早到最新），然后计算累计余额
+    const sortedMoves = [...moves].sort((a: any, b: any) => {
+      const dateA = new Date(a.date || 0).getTime();
+      const dateB = new Date(b.date || 0).getTime();
+      if (dateA !== dateB) return dateA - dateB;
+      return (a.id || 0) - (b.id || 0);
+    });
+    
+    let runningBalance = 0; // 从0开始累加
+    
+    const out = sortedMoves.map((m: any) => {
+      // 根据库位类型判断是入库还是出库
+      const fromLocationId = m.location_id?.[0];
+      const toLocationId = m.location_dest_id?.[0];
+      const fromUsage = fromLocationId ? locationUsageMap.get(fromLocationId) : 'internal';
+      const toUsage = toLocationId ? locationUsageMap.get(toLocationId) : 'internal';
+      
+      const fromLocation = m.location_id?.[1] || '';
+      const toLocation = m.location_dest_id?.[1] || '';
+      
+      let moveType = 'transfer'; // 默认是转移
+      let qtyChange = 0;
+      
+      // 判断变动类型
+      if (fromUsage === 'supplier' || fromUsage === 'inventory' || fromUsage === 'production') {
+        // 从供应商/盘点/生产到内部 = 入库
+        if (toUsage === 'internal') {
+          moveType = 'in';
+          qtyChange = m.product_uom_qty || 0;
+        }
+      } else if (toUsage === 'customer' || toUsage === 'inventory') {
+        // 从内部到客户/盘点 = 出库
+        if (fromUsage === 'internal') {
+          moveType = 'out';
+          qtyChange = -(m.product_uom_qty || 0);
+        }
+      } else if (fromUsage === 'internal' && toUsage === 'internal') {
+        // 内部转移：不影响总库存
+        moveType = 'transfer';
+        qtyChange = 0;
+      } else {
+        // 其他情况，根据库位名称判断
+        const fromIsInternal = fromLocation.toLowerCase().includes('internal') || 
+                              fromLocation.toLowerCase().includes('stock') ||
+                              fromLocation.toLowerCase().includes('wh');
+        const toIsInternal = toLocation.toLowerCase().includes('internal') || 
+                            toLocation.toLowerCase().includes('stock') ||
+                            toLocation.toLowerCase().includes('wh');
+        
+        if (!fromIsInternal && toIsInternal) {
+          moveType = 'in';
+          qtyChange = m.product_uom_qty || 0;
+        } else if (fromIsInternal && !toIsInternal) {
+          moveType = 'out';
+          qtyChange = -(m.product_uom_qty || 0);
+        } else {
+          moveType = 'transfer';
+          qtyChange = 0;
+        }
+      }
+      
+      // 计算变动前后的库存余额
+      const balanceBefore = runningBalance;
+      runningBalance += qtyChange; // 累加变动
+      const balanceAfter = runningBalance;
+      
+      return {
+        id: m.id,
+        date: m.date,
+        qty_change: qtyChange,
+        qty_absolute: Math.abs(qtyChange) || 0,
+        uom: m.product_uom?.[1] || 'Units',
+        move_type: moveType, // 'in', 'out', 'transfer'
+        from: fromLocation,
+        to: toLocation,
+        ref: m.reference || m.origin || m.name || '',
+        balance_before: balanceBefore,
+        balance_after: balanceAfter,
+        created_by: m.create_uid?.[1],
+        updated_by: m.write_uid?.[1],
+      };
+    }).reverse(); // 反转回日期倒序（最新的在前）
 
     return NextResponse.json({ 
       history: out,

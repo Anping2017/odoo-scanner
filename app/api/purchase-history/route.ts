@@ -46,14 +46,60 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: '缺少产品ID' }, { status: 400 });
     }
 
-    // 获取采购订单行
+    // 在多公司环境中，需要确保只查询当前公司的订单
     const offset = (page - 1) * pageSize;
+    let companyOrderIds: number[] = []; // 在外部定义，以便在获取总数时使用
+    
+    // 构建查询条件：产品ID + 公司过滤
+    let lineDomain: any[] = [['product_id', '=', parseInt(productId)]];
+    
+    // 在多公司环境中，通过order_id.company_id过滤订单行
+    if (companyId) {
+      // 先获取属于当前公司的采购订单ID（用于过滤订单行）
+      try {
+        const orderIdsResult = await rpc('/web/dataset/call_kw', {
+          model: 'purchase.order',
+          method: 'search',
+          args: [[['company_id', '=', companyId]]],
+          kwargs: { 
+            limit: 50000, // 限制最大订单数，避免性能问题
+            context: ctx 
+          }
+        }, sessionId, base);
+        
+        if (Array.isArray(orderIdsResult) && orderIdsResult.length > 0) {
+          companyOrderIds = orderIdsResult;
+          lineDomain.push(['order_id', 'in', companyOrderIds]);
+        } else {
+          // 如果没有找到属于当前公司的订单，直接返回空结果
+          return NextResponse.json({
+            purchases: [],
+            total: 0,
+            page: page,
+            pageSize: pageSize,
+            totalPages: 0
+          });
+        }
+      } catch (e) {
+        console.error('获取公司采购订单ID失败:', e);
+        // 查询失败时返回空结果，确保数据一致性
+        return NextResponse.json({
+          purchases: [],
+          total: 0,
+          page: page,
+          pageSize: pageSize,
+          totalPages: 0
+        });
+      }
+    }
+
+    // 获取采购订单行（带分页，已过滤公司）
     const purchaseData = await rpc('/web/dataset/call_kw', {
       model: 'purchase.order.line',
       method: 'search_read',
       args: [
-        [['product_id', '=', parseInt(productId)]],
-        ['id', 'order_id', 'product_id', 'product_qty', 'price_unit', 'price_subtotal', 'date_planned']
+        lineDomain,
+          ['id', 'order_id', 'product_id', 'product_qty', 'price_unit', 'price_subtotal', 'date_planned']
       ],
       kwargs: {
         limit: pageSize,
@@ -65,19 +111,30 @@ export async function GET(req: NextRequest) {
 
     const purchaseLines = purchaseData || [];
     
-    // 获取总记录数
-    const countData = await rpc('/web/dataset/call_kw', {
-      model: 'purchase.order.line',
-      method: 'search_count',
-      args: [
-        [['product_id', '=', parseInt(productId)]]
-      ],
-      kwargs: {
-        context: ctx
+    // 获取总记录数（需要考虑公司过滤）
+    let totalCount = 0;
+    try {
+      let countDomain: any[] = [['product_id', '=', parseInt(productId)]];
+      
+      // 如果有多公司过滤，需要应用相同的过滤条件
+      if (companyId && companyOrderIds.length > 0) {
+        countDomain.push(['order_id', 'in', companyOrderIds]);
       }
-    }, sessionId, base);
-
-    const totalCount = countData || 0;
+      
+      const countData = await rpc('/web/dataset/call_kw', {
+        model: 'purchase.order.line',
+        method: 'search_count',
+        args: [countDomain],
+        kwargs: {
+          context: ctx
+        }
+      }, sessionId, base);
+      
+      totalCount = countData || 0;
+    } catch (e) {
+      console.error('获取总数失败:', e);
+      totalCount = purchaseLines.length;
+    }
 
     if (purchaseLines.length === 0) {
       return NextResponse.json({
@@ -90,45 +147,69 @@ export async function GET(req: NextRequest) {
     }
 
     // 获取采购订单信息
-    const orderIds = [...new Set(purchaseLines.map((line: any) => line.order_id[0]))];
-    const ordersData = await rpc('/web/dataset/call_kw', {
-      model: 'purchase.order',
-      method: 'search_read',
-      args: [
-        [['id', 'in', orderIds]],
-        ['id', 'name', 'date_order', 'partner_id', 'state']
-      ],
-      kwargs: {
-        context: ctx
-      }
-    }, sessionId, base);
+    const lineOrderIds = [...new Set(purchaseLines.map((line: any) => line.order_id?.[0]).filter(Boolean))];
+    if (lineOrderIds.length > 0) {
+      // 如果有多公司过滤，只读取属于当前公司的订单
+      const orderIdsToRead = companyId 
+        ? lineOrderIds.filter(id => companyOrderIds.includes(id))
+        : lineOrderIds;
+      
+      if (orderIdsToRead.length > 0) {
+        const ordersData = await rpc('/web/dataset/call_kw', {
+          model: 'purchase.order',
+          method: 'read',
+          args: [orderIdsToRead, ['id', 'name', 'date_order', 'partner_id', 'state', 'company_id']],
+          kwargs: {
+            context: ctx
+          }
+        }, sessionId, base).catch(() => []);
 
-    const orderMap = new Map();
-    if (ordersData) {
-      ordersData.forEach((order: any) => {
-        orderMap.set(order.id, order);
-      });
+        const orderMap = new Map();
+        if (Array.isArray(ordersData)) {
+          ordersData.forEach((order: any) => {
+            // 再次确认订单属于当前公司（双重检查，确保数据安全）
+            if (!companyId || !order.company_id || order.company_id[0] === companyId) {
+              orderMap.set(order.id, order);
+            }
+          });
+        }
+        
+        // 组合数据（只包含订单信息可访问的订单行）
+        const purchases: PurchaseItem[] = purchaseLines
+          .filter((line: any) => {
+            const orderId = line.order_id?.[0];
+            return orderId && orderMap.has(orderId);
+          })
+          .map((line: any) => {
+            const order = orderMap.get(line.order_id[0]);
+            return {
+              id: line.id,
+              order_name: order?.name || `PO-${line.order_id[0]}`,
+              order_id: line.order_id[0],
+              date: line.date_planned || order?.date_order || '未知日期',
+              supplier: order?.partner_id?.[1] || '未知供应商',
+              quantity: line.product_qty,
+              unit_price: line.price_unit,
+              total_amount: line.price_subtotal, // 税前价格
+              total_amount_incl: line.price_subtotal, // 采购订单行没有税后价格字段，使用税前价格
+              product_id: line.product_id[0],
+              state: order?.state || 'unknown'
+            };
+          });
+
+        return NextResponse.json({
+          purchases,
+          total: totalCount,
+          page: page,
+          pageSize: pageSize,
+          totalPages: Math.ceil(totalCount / pageSize)
+        });
+      }
     }
 
-    // 组合数据
-    const purchases: PurchaseItem[] = purchaseLines.map((line: any) => {
-      const order = orderMap.get(line.order_id[0]);
-      return {
-        id: line.id,
-        order_name: order?.name || `PO-${line.order_id[0]}`,
-        order_id: line.order_id[0],
-        date: line.date_planned || order?.date_order || '未知日期',
-        supplier: order?.partner_id?.[1] || '未知供应商',
-        quantity: line.product_qty,
-        unit_price: line.price_unit,
-        total_amount: line.price_subtotal,
-        product_id: line.product_id[0],
-        state: order?.state || 'unknown'
-      };
-    });
-
+    // 如果没有订单行或无法访问订单，返回空结果
     return NextResponse.json({
-      purchases,
+      purchases: [],
       total: totalCount,
       page: page,
       pageSize: pageSize,
