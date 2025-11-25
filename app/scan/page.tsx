@@ -507,6 +507,63 @@ export default function ScanPage() {
           .action-buttons button {
             width: 100% !important;
           }
+          /* 手动输入框手机端优化 */
+          .manual-input-form {
+            flex-direction: column !important;
+            gap: 10px !important;
+          }
+          .manual-input-form input {
+            width: 100% !important;
+            margin: 0 !important;
+            flex: none !important;
+          }
+          /* 按钮组在手机端并排显示 */
+          .manual-input-form .button-group {
+            display: flex !important;
+            gap: 10px !important;
+            width: 100% !important;
+            flex-direction: row !important;
+          }
+          .manual-input-form .button-group button {
+            flex: 1 !important;
+            min-width: 0 !important;
+          }
+        }
+        /* 电脑端手动输入框优化 - 输入框单独一行 */
+        @media (min-width: 769px) {
+          .manual-input-form {
+            flex-direction: column !important;
+            gap: 12px !important;
+          }
+          .manual-input-form input {
+            width: 100% !important;
+            flex: none !important;
+          }
+          .manual-input-form .button-group {
+            width: 100% !important;
+            display: flex !important;
+            gap: 10px !important;
+          }
+          .manual-input-form .button-group button {
+            flex: 1 !important;
+          }
+          /* 标签页导航手机端优化 - 2x2网格布局 */
+          .tab-navigation {
+            flex-wrap: wrap !important;
+            overflow-x: visible !important;
+            overflow: visible !important;
+          }
+          .tab-navigation button {
+            flex: 1 1 calc(50% - 4px) !important;
+            min-width: calc(50% - 4px) !important;
+            max-width: calc(50% - 4px) !important;
+            font-size: 12px !important;
+            padding: 10px 8px !important;
+            white-space: normal !important;
+            word-break: break-word !important;
+            line-height: 1.3 !important;
+            text-align: center !important;
+          }
         }
         @media (max-width: 480px) {
           .top-bar-title {
@@ -517,6 +574,11 @@ export default function ScanPage() {
           }
           .camera-container.paused {
             height: 10vh !important;
+          }
+          /* 更小屏幕的标签页优化 */
+          .tab-navigation button {
+            font-size: 11px !important;
+            padding: 8px 6px !important;
           }
           /* 更小屏幕的进一步优化 */
           .product-card {
@@ -555,15 +617,24 @@ export default function ScanPage() {
             font-size: 11px !important;
             padding: 5px 8px !important;
           }
-          /* 标签页手机端优化 */
-          .product-card > div > div:first-child {
-            overflow-x: auto !important;
-            -webkit-overflow-scrolling: touch !important;
+          /* 标签页手机端优化 - 移除横向滚动，允许换行 */
+          .tab-navigation {
+            flex-wrap: wrap !important;
+            overflow-x: visible !important;
+            overflow: visible !important;
+            -webkit-overflow-scrolling: auto !important;
           }
-          .product-card > div > div:first-child button {
+          .tab-navigation button {
             font-size: 12px !important;
-            padding: 8px 12px !important;
-            white-space: nowrap !important;
+            padding: 10px 8px !important;
+            white-space: normal !important;
+            flex: 1 1 calc(50% - 4px) !important;
+            min-width: calc(50% - 4px) !important;
+            max-width: calc(50% - 4px) !important;
+            text-align: center !important;
+            word-break: break-word !important;
+            line-height: 1.3 !important;
+            border-radius: 8px 8px 0 0 !important;
           }
           .history-item {
             padding: 8px !important;
@@ -600,7 +671,7 @@ export default function ScanPage() {
           display: 'flex',
           flexDirection: 'column',
           background: 'linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)',
-          paddingBottom: 'calc(92px + env(safe-area-inset-bottom))',
+          paddingBottom: 'calc(80px + env(safe-area-inset-bottom))',
         }}
       >
         {/* 顶部栏 */}
@@ -927,6 +998,115 @@ export default function ScanPage() {
           </div>
         )}
 
+        {/* 手动输入条码框 - 在相机栏下方 */}
+        <form
+          className="manual-input-form"
+          onSubmit={handleSubmit}
+          style={{
+            marginTop: 16,
+            padding: '12px 0',
+            display: 'flex',
+            gap: 10,
+            alignItems: 'center',
+            width: '100%',
+            maxWidth: '100%',
+            boxSizing: 'border-box',
+          }}
+        >
+          <input
+            inputMode="search"
+            placeholder="手动输入/粘贴条码"
+            value={codeInput}
+            onChange={(e) => {
+              let value = e.target.value;
+              // 自动将首字母大写
+              if (value.length > 0) {
+                value = value.charAt(0).toUpperCase() + value.slice(1);
+              }
+              setCodeInput(value);
+            }}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              padding: '14px 16px',
+              borderRadius: 12,
+              border: '2px solid #e5e7eb',
+              outline: 'none',
+              fontSize: 16,
+              background: '#f9fafb',
+              transition: 'all 0.2s ease',
+              maxWidth: '100%',
+              boxSizing: 'border-box',
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = '#667eea';
+              e.currentTarget.style.background = '#fff';
+              e.currentTarget.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.1)';
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = '#e5e7eb';
+              e.currentTarget.style.background = '#f9fafb';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
+          />
+          <div className="button-group" style={{ display: 'flex', gap: 10, width: '100%' }}>
+            <button
+              type="submit"
+              style={{
+                flex: 1,
+                padding: '14px 20px',
+                borderRadius: 12,
+                border: 'none',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: '#fff',
+                fontWeight: 600,
+                fontSize: 15,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
+                whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.3)';
+              }}
+            >
+              🔍 查询
+            </button>
+            <button
+              type="button"
+              onClick={handleClear}
+              style={{
+                flex: 1,
+                padding: '14px 16px',
+                borderRadius: 12,
+                border: '2px solid #e5e7eb',
+                background: '#fff',
+                color: '#374151',
+                fontWeight: 600,
+                fontSize: 15,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#dc2626';
+                e.currentTarget.style.color = '#dc2626';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#e5e7eb';
+                e.currentTarget.style.color = '#374151';
+              }}
+            >
+              🗑️ 清空
+            </button>
+          </div>
+        </form>
+
         {/* 最近条码 */}
         {lastCode ? (
           <div
@@ -997,14 +1177,17 @@ export default function ScanPage() {
                 maxWidth: '100%',
                 boxSizing: 'border-box',
               }}>
-                <div style={{
-                  display: 'flex',
-                  gap: 8,
-                  borderBottom: '2px solid #f3f4f6',
-                  marginBottom: 16,
-                  overflowX: 'auto',
-                  WebkitOverflowScrolling: 'touch',
-                }}>
+                <div 
+                  className="tab-navigation"
+                  style={{
+                    display: 'flex',
+                    gap: 8,
+                    borderBottom: '2px solid #f3f4f6',
+                    marginBottom: 16,
+                    overflowX: 'auto',
+                    WebkitOverflowScrolling: 'touch',
+                  }}
+                >
                   {[
                     { key: 'info', label: '📦 产品信息', icon: '📦' },
                     { key: 'sales', label: '💰 销售记录', icon: '💰' },
@@ -1739,119 +1922,6 @@ export default function ScanPage() {
 
         </div>
       </div>
-
-      {/* 底部固定输入条（手动输入条码） */}
-      <form
-        onSubmit={handleSubmit}
-        style={{
-          position: 'fixed',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          zIndex: 20,
-          background: 'rgba(255, 255, 255, 0.98)',
-          backdropFilter: 'blur(10px)',
-          borderTop: '1px solid #e5e7eb',
-          padding: '12px 16px calc(12px + env(safe-area-inset-bottom))',
-          display: 'flex',
-          gap: 10,
-          alignItems: 'center',
-          boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.05)',
-          maxWidth: '100%',
-          boxSizing: 'border-box',
-        }}
-      >
-        <input
-          inputMode="search"
-          placeholder="手动输入/粘贴条码"
-          value={codeInput}
-          onChange={(e) => {
-            let value = e.target.value;
-            // 自动将首字母大写
-            if (value.length > 0) {
-              value = value.charAt(0).toUpperCase() + value.slice(1);
-            }
-            setCodeInput(value);
-          }}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            padding: '14px 16px',
-            borderRadius: 12,
-            border: '2px solid #e5e7eb',
-            outline: 'none',
-            fontSize: 16,
-            background: '#f9fafb',
-            transition: 'all 0.2s ease',
-            maxWidth: '100%',
-            boxSizing: 'border-box',
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = '#667eea';
-            e.currentTarget.style.background = '#fff';
-            e.currentTarget.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.1)';
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = '#e5e7eb';
-            e.currentTarget.style.background = '#f9fafb';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
-        />
-        <button
-          type="submit"
-          style={{
-            padding: '14px 20px',
-            borderRadius: 12,
-            border: 'none',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            color: '#fff',
-            fontWeight: 600,
-            fontSize: 15,
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
-            flexShrink: 0,
-            whiteSpace: 'nowrap',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-1px)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.3)';
-          }}
-            >
-              🔍 查询
-            </button>
-        <button
-          type="button"
-          onClick={handleClear}
-          style={{
-            padding: '14px 16px',
-            borderRadius: 12,
-            border: '2px solid #e5e7eb',
-            background: '#fff',
-            color: '#374151',
-            fontWeight: 600,
-            fontSize: 15,
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            flexShrink: 0,
-            whiteSpace: 'nowrap',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.borderColor = '#dc2626';
-            e.currentTarget.style.color = '#dc2626';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.borderColor = '#e5e7eb';
-            e.currentTarget.style.color = '#374151';
-          }}
-        >
-          🗑️ 清空
-        </button>
-      </form>
 
       {/* 图片放大模态框 */}
       {showImageModal && (

@@ -1163,13 +1163,40 @@ export default function ProductsPage() {
           }
           /* 顶部导航栏 */
           .top-nav {
-            flex-wrap: wrap !important;
-            gap: 10px !important;
-            padding: 14px 12px !important;
+            flex-wrap: nowrap !important;
+            gap: 8px !important;
+            padding: 12px !important;
             background: #fff !important;
             border-radius: 12px !important;
             margin-bottom: 12px !important;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
+            align-items: center !important;
+          }
+          .top-nav > div:first-child {
+            flex-shrink: 0 !important;
+          }
+          .top-nav > div:nth-child(2) {
+            flex: 1 !important;
+            min-width: 0 !important;
+          }
+          .top-nav > div:nth-child(2) h1 {
+            font-size: 16px !important;
+            margin: 0 !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+          }
+          .top-nav > div:last-child {
+            flex-shrink: 0 !important;
+            display: flex !important;
+            gap: 6px !important;
+            align-items: center !important;
+            flex-wrap: nowrap !important;
+          }
+          .top-nav > div:last-child button {
+            font-size: 11px !important;
+            padding: 6px 10px !important;
+            white-space: nowrap !important;
           }
           .top-nav-button {
             padding: 10px 16px !important;
@@ -1189,19 +1216,26 @@ export default function ProductsPage() {
             box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
           }
           .search-mode-buttons {
-            display: grid !important;
-            grid-template-columns: repeat(2, 1fr) !important;
-            gap: 8px !important;
+            display: flex !important;
+            flex-wrap: wrap !important;
+            gap: 6px !important;
             width: 100% !important;
+            align-items: center !important;
+          }
+          .search-mode-buttons > div:first-child {
+            font-size: 12px !important;
+            margin-right: 4px !important;
+            flex-shrink: 0 !important;
           }
           .search-mode-buttons button {
-            font-size: 13px !important;
-            padding: 12px 14px !important;
+            font-size: 11px !important;
+            padding: 8px 10px !important;
             white-space: nowrap !important;
-            min-height: 44px !important;
-            border-radius: 8px !important;
+            min-height: 36px !important;
+            border-radius: 6px !important;
             font-weight: 500 !important;
             transition: all 0.2s ease !important;
+            flex: 0 0 auto !important;
           }
           .products-search {
             width: 100% !important;
@@ -1210,10 +1244,23 @@ export default function ProductsPage() {
           .products-search input {
             font-size: 16px !important;
             padding: 14px 18px !important;
+            padding-bottom: 50px !important;
             border: 2px solid #667eea !important;
             box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15) !important;
             border-radius: 10px !important;
             min-height: 48px !important;
+          }
+          /* 当输入框有内容时，恢复正常的 padding */
+          .products-search input:not(:placeholder-shown) {
+            padding-bottom: 14px !important;
+          }
+          /* 调整提示文字位置，避免与 placeholder 重合 */
+          .products-search .search-hint-text {
+            bottom: 12px !important;
+            font-size: 10px !important;
+            line-height: 1.3 !important;
+            left: 18px !important;
+            right: 18px !important;
           }
           .products-search > div:last-child {
             font-size: 12px !important;
@@ -1250,12 +1297,36 @@ export default function ProductsPage() {
             overflow: hidden !important;
           }
           .filter-bar > div:first-child {
-            padding: 14px 16px !important;
-            font-size: 14px !important;
+            padding: 12px 14px !important;
+            font-size: 13px !important;
             font-weight: 600 !important;
             color: #374151 !important;
             background: #f9fafb !important;
             border-bottom: 1px solid #e5e7eb !important;
+            flex-wrap: nowrap !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            overflow: hidden !important;
+          }
+          .filter-bar > div:first-child > div:first-child {
+            flex: 1 !important;
+            min-width: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+            overflow: hidden !important;
+          }
+          .filter-bar > div:first-child > div:first-child > span:nth-child(2) {
+            flex-shrink: 0 !important;
+            white-space: nowrap !important;
+          }
+          .filter-bar > div:first-child > div:last-child {
+            flex-shrink: 0 !important;
+            margin-left: 8px !important;
+            display: flex !important;
+            gap: 6px !important;
+            align-items: center !important;
+            white-space: nowrap !important;
           }
           .filter-bar > div:last-child {
             padding: 16px !important;
@@ -1460,25 +1531,78 @@ export default function ProductsPage() {
             padding: 12px !important;
           }
           .search-mode-buttons {
-            grid-template-columns: 1fr !important;
-            gap: 6px !important;
+            gap: 4px !important;
+          }
+          .search-mode-buttons > div:first-child {
+            font-size: 11px !important;
+            margin-right: 2px !important;
           }
           .search-mode-buttons button {
-            font-size: 11px !important;
-            padding: 8px 10px !important;
+            font-size: 10px !important;
+            padding: 6px 8px !important;
+            min-height: 32px !important;
           }
           .products-search input {
             font-size: 18px !important;
             padding: 14px 16px !important;
+            padding-bottom: 48px !important;
             border: 2px solid #667eea !important;
             box-shadow: 0 3px 8px rgba(102, 126, 234, 0.2) !important;
+          }
+          /* 当输入框有内容时，恢复正常的 padding */
+          .products-search input:not(:placeholder-shown) {
+            padding-bottom: 14px !important;
+          }
+          /* 调整提示文字位置，避免与 placeholder 重合 */
+          .products-search .search-hint-text {
+            bottom: 10px !important;
+            font-size: 9px !important;
+            line-height: 1.2 !important;
+            left: 16px !important;
+            right: 16px !important;
           }
           .products-search > div:last-child {
             font-size: 10px !important;
           }
           .filter-bar > div:first-child {
-            padding: 8px 12px !important;
+            padding: 8px 10px !important;
             font-size: 12px !important;
+            flex-wrap: nowrap !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            gap: 6px !important;
+            overflow: hidden !important;
+          }
+          .filter-bar > div:first-child > div:first-child {
+            flex: 1 !important;
+            min-width: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 4px !important;
+            overflow: hidden !important;
+            flex-shrink: 1 !important;
+          }
+          .filter-bar > div:first-child > div:first-child > span:first-child {
+            flex-shrink: 0 !important;
+            font-size: 10px !important;
+          }
+          .filter-bar > div:first-child > div:first-child > span:nth-child(2) {
+            flex-shrink: 0 !important;
+            white-space: nowrap !important;
+            font-size: 12px !important;
+          }
+          .filter-bar > div:first-child > div:first-child > span:last-child {
+            flex-shrink: 0 !important;
+            font-size: 12px !important;
+            padding: 1px 4px !important;
+          }
+          .filter-bar > div:first-child > div:last-child {
+            flex-shrink: 0 !important;
+            margin-left: 6px !important;
+            display: flex !important;
+            gap: 4px !important;
+            align-items: center !important;
+            white-space: nowrap !important;
           }
           .filter-bar > div:last-child {
             padding: 10px 12px !important;
@@ -2084,19 +2208,21 @@ export default function ProductsPage() {
                 />
                 {/* 搜索提示 - 只在输入框为空时显示在输入框内部底部 */}
                 {!searchTerm && (
-                  <div style={{
-                    position: 'absolute',
-                    bottom: '14px',
-                    left: '24px',
-                    right: '24px',
-                    fontSize: '11px',
-                    color: '#9ca3af',
-                    lineHeight: '1.4',
-                    pointerEvents: 'none',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap'
-                  }}>
+                  <div 
+                    className="search-hint-text"
+                    style={{
+                      position: 'absolute',
+                      bottom: '14px',
+                      left: '24px',
+                      right: '24px',
+                      fontSize: '11px',
+                      color: '#9ca3af',
+                      lineHeight: '1.4',
+                      pointerEvents: 'none',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
                     {searchMode === 'fuzzy' ? (
                       <>💡 支持多关键词（空格分隔），用引号包裹精确短语，如 "iPhone 15" battery</>
                     ) : searchMode === 'exact' ? (
@@ -2300,7 +2426,7 @@ export default function ProductsPage() {
                 transform: showFilters ? 'rotate(0deg)' : 'rotate(-90deg)',
                 transition: 'transform 0.3s ease',
                 display: 'inline-block',
-                fontSize: '12px'
+                fontSize: '11px'
               }}>▼</span>
               <span>筛选条件</span>
               {(filterStoreStock !== null || filterHeadquartersStock !== null || selectedPosCategories.length > 0 || minPrice || maxPrice || quickFilter !== null || (enableResultSearch && (resultSearchInclude.trim() || resultSearchExclude.trim()))) && (
@@ -2324,39 +2450,39 @@ export default function ProductsPage() {
                 </span>
               )}
             </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              {(filterStoreStock !== null || filterHeadquartersStock !== null || selectedPosCategories.length > 0 || minPrice || maxPrice || quickFilter !== null || (enableResultSearch && (resultSearchInclude.trim() || resultSearchExclude.trim()))) && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    clearAllFilters();
-                  }}
-                  style={{
-                    padding: '4px 12px',
-                    borderRadius: '6px',
-                    border: '1px solid #dc2626',
-                    background: '#fee2e2',
-                    color: '#dc2626',
-                    fontSize: '12px',
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    whiteSpace: 'nowrap'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#fecaca';
-                    e.currentTarget.style.borderColor = '#b91c1c';
-                    e.currentTarget.style.color = '#b91c1c';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#fee2e2';
-                    e.currentTarget.style.borderColor = '#dc2626';
-                    e.currentTarget.style.color = '#dc2626';
-                  }}
-                >
-                  🗑️ 清除筛选
-                </button>
-              )}
+            {(filterStoreStock !== null || filterHeadquartersStock !== null || selectedPosCategories.length > 0 || minPrice || maxPrice || quickFilter !== null || (enableResultSearch && (resultSearchInclude.trim() || resultSearchExclude.trim()))) && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  clearAllFilters();
+                }}
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: '6px',
+                  border: '1px solid #dc2626',
+                  background: '#fee2e2',
+                  color: '#dc2626',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  whiteSpace: 'nowrap',
+                  marginRight: '8px'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#fecaca';
+                  e.currentTarget.style.borderColor = '#b91c1c';
+                  e.currentTarget.style.color = '#b91c1c';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#fee2e2';
+                  e.currentTarget.style.borderColor = '#dc2626';
+                  e.currentTarget.style.color = '#dc2626';
+                }}
+              >
+                🗑️ 清除筛选
+              </button>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -2383,7 +2509,6 @@ export default function ProductsPage() {
             >
               {showFilters ? '收起' : '展开'}
             </button>
-            </div>
           </div>
           
           {/* 筛选内容 */}
