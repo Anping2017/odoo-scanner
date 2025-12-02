@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 
 type InventoryHistory = {
   id: number;
@@ -74,6 +75,7 @@ const parseOperatorDetails = (notes?: string): Array<{name: string, date: string
 };
 
 export default function InventoryHistoryPage() {
+  const router = useRouter();
   const [histories, setHistories] = useState<InventoryHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -435,7 +437,7 @@ export default function InventoryHistoryPage() {
                   </button>
               )}
               <button
-                onClick={() => window.location.href = '/scan'}
+                onClick={() => router.push('/dashboard')}
                 style={{
                   padding: '8px 12px',
                   borderRadius: 8,
@@ -444,6 +446,7 @@ export default function InventoryHistoryPage() {
                   color: '#374151',
                   fontWeight: 500,
                   fontSize: 14,
+                  cursor: 'pointer',
                 }}
               >
                 ⬅️ 返回

@@ -110,6 +110,67 @@ export async function GET(req: NextRequest) {
               }
             }, sessionId, base).catch(() => []);
 
+            // 尝试获取 receipt number（尝试多个可能的字段名）
+            let receiptNumberMap = new Map();
+            const possibleFields = ['receipt_number', 'pos_reference', 'receipt_ref', 'receipt_number_display'];
+            
+            for (const fieldName of possibleFields) {
+              try {
+                const receiptData = await rpc('/web/dataset/call_kw', {
+                  model: 'pos.order',
+                  method: 'read',
+                  args: [orderIdsToRead, ['id', fieldName]],
+                  kwargs: { 
+                    context: ctx 
+                  }
+                }, sessionId, base).catch(() => null);
+                
+                if (receiptData && Array.isArray(receiptData)) {
+                  receiptData.forEach((order: any) => {
+                    if (order.id && order[fieldName] !== undefined && order[fieldName] !== false && order[fieldName] !== null) {
+                      receiptNumberMap.set(order.id, order[fieldName]);
+                    }
+                  });
+                  // 如果成功获取到数据，跳出循环
+                  if (receiptNumberMap.size > 0) {
+                    console.log(`成功使用字段 ${fieldName} 获取 receipt number`);
+                    break;
+                  }
+                }
+              } catch (e) {
+                // 继续尝试下一个字段
+                continue;
+              }
+            }
+            
+            // 如果所有字段都失败，尝试一次性读取所有可能的字段
+            if (receiptNumberMap.size === 0) {
+              try {
+                const allFieldsData = await rpc('/web/dataset/call_kw', {
+                  model: 'pos.order',
+                  method: 'read',
+                  args: [orderIdsToRead, ['id', 'receipt_number', 'pos_reference', 'receipt_ref']],
+                  kwargs: { 
+                    context: ctx 
+                  }
+                }, sessionId, base).catch(() => null);
+                
+                if (allFieldsData && Array.isArray(allFieldsData)) {
+                  allFieldsData.forEach((order: any) => {
+                    if (order.id) {
+                      // 按优先级尝试字段
+                      const receiptValue = order.receipt_number || order.pos_reference || order.receipt_ref;
+                      if (receiptValue !== undefined && receiptValue !== false && receiptValue !== null) {
+                        receiptNumberMap.set(order.id, receiptValue);
+                      }
+                    }
+                  });
+                }
+              } catch (e) {
+                console.log('尝试读取 receipt number 字段失败:', e);
+              }
+            }
+
             const orderMap = new Map();
             if (Array.isArray(ordersData)) {
               ordersData.forEach((order: any) => {
@@ -128,10 +189,18 @@ export async function GET(req: NextRequest) {
               })
               .map((sale: any) => {
                 const order = orderMap.get(sale.order_id[0]);
+                const receiptNumber = receiptNumberMap.get(sale.order_id[0]) || null;
+                
+                // 调试日志
+                if (receiptNumber) {
+                  console.log(`订单 ${sale.order_id[0]} 的 receipt number:`, receiptNumber);
+                }
+                
                 return {
                   id: sale.id,
                   order_name: order?.name || `POS-${sale.order_id[0]}`,
                   order_id: sale.order_id[0],
+                  receipt_number: receiptNumber,
                   date: order?.date_order || '未知日期',
                   customer: order?.partner_id?.[1] || 'POS客户',
                   quantity: sale.qty,

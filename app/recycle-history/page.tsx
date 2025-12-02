@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 
 type RecycleHistory = {
   id: number;
@@ -27,6 +28,7 @@ type RecycleHistory = {
 };
 
 export default function RecycleHistoryPage() {
+  const router = useRouter();
   const [histories, setHistories] = useState<RecycleHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -149,7 +151,7 @@ export default function RecycleHistoryPage() {
             返回回收
           </button>
           <button
-            onClick={() => window.location.href = '/'}
+            onClick={() => router.push('/dashboard')}
             style={{
               padding: '8px 16px',
               borderRadius: 8,

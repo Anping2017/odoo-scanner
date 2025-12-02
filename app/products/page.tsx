@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { saveOfflineProducts, loadOfflineProducts, clearOfflineProducts } from '@/lib/indexedDB';
 
 type Product = {
@@ -28,6 +29,7 @@ type Product = {
 };
 
 export default function ProductsPage() {
+  const router = useRouter();
   const [products, setProducts] = useState<Product[]>([]); // 当前显示的产品（经过筛选、排序、分页）
   const [cachedProducts, setCachedProducts] = useState<Product[]>([]); // 缓存的搜索结果（从API获取的完整数据）
   const [loading, setLoading] = useState(false);
@@ -1830,25 +1832,29 @@ export default function ProductsPage() {
           gap: '16px',
           flexWrap: 'wrap'
         }}>
-          <a href="/" className="top-nav-button" style={{
-            padding: '8px 16px',
-            background: '#f3f4f6',
-            borderRadius: '8px',
-            color: '#374151',
-            textDecoration: 'none',
-            fontSize: '14px',
-            fontWeight: 500,
-            transition: 'all 0.2s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#e5e7eb';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = '#f3f4f6';
-          }}
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="top-nav-button"
+            style={{
+              padding: '8px 16px',
+              background: '#f3f4f6',
+              borderRadius: '8px',
+              color: '#374151',
+              border: 'none',
+              fontSize: '14px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#e5e7eb';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = '#f3f4f6';
+            }}
           >
             ← 返回首页
-          </a>
+          </button>
           <div style={{ flex: 1, minWidth: '200px' }}>
             <h1 style={{ margin: 0, fontSize: '20px', fontWeight: 600, color: '#111827' }}>
               产品查询
@@ -4684,6 +4690,11 @@ export default function ProductsPage() {
                       </div>
                       <div style={{ color: '#6b7280', marginBottom: 6, fontSize: 13 }}>
                         客户: {sale.customer || 'POS客户'}
+                        {sale.receipt_number && (
+                          <span style={{ marginLeft: 12, color: '#9ca3af' }}>
+                            | 收据号: {sale.receipt_number}
+                          </span>
+                        )}
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', color: '#6b7280', fontSize: 13 }}>
                         <span>{sale.date || '未知日期'}</span>

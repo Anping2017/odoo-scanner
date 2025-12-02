@@ -1180,12 +1180,12 @@ export default function ScanPage() {
                 <div 
                   className="tab-navigation"
                   style={{
-                    display: 'flex',
-                    gap: 8,
-                    borderBottom: '2px solid #f3f4f6',
-                    marginBottom: 16,
-                    overflowX: 'auto',
-                    WebkitOverflowScrolling: 'touch',
+                  display: 'flex',
+                  gap: 8,
+                  borderBottom: '2px solid #f3f4f6',
+                  marginBottom: 16,
+                  overflowX: 'auto',
+                  WebkitOverflowScrolling: 'touch',
                   }}
                 >
                   {[
