@@ -282,7 +282,7 @@ export default function ReceivingPage() {
 
   return (
     <>
-      <style>{`
+      <style dangerouslySetInnerHTML={{ __html: `
         @media (max-width: 768px) {
           .debug-buttons {
             display: none !important;
@@ -372,7 +372,7 @@ export default function ReceivingPage() {
             min-height: 44px;
           }
         }
-      `}</style>
+      ` }} />
       <div style={{ minHeight: '100vh', background: '#f9fafb' }}>
         {/* 顶部导航栏 */}
         <div style={{

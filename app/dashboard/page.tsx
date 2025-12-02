@@ -61,8 +61,8 @@ const features: FeatureCard[] = [
   },
   {
     id: 'inventory-history',
-    title: '库存历史',
-    description: '查看库存变动历史记录',
+    title: '盘点历史',
+    description: '查看盘点历史记录',
     icon: '📊',
     href: '/inventory-history',
     color: '#ec4899',

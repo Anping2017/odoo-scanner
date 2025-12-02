@@ -88,6 +88,8 @@ export default function ProductsPage() {
   const [offlineMode, setOfflineMode] = useState<boolean>(false); // 离线模式
   const [offlineData, setOfflineData] = useState<Product[]>([]); // 离线数据
   const [downloadingOfflineData, setDownloadingOfflineData] = useState<boolean>(false); // 正在下载离线数据
+  const [offlineDataTimestamp, setOfflineDataTimestamp] = useState<number | null>(null); // 离线数据更新时间戳
+  const [showUpdateTooltip, setShowUpdateTooltip] = useState<boolean>(false); // 显示更新时间提示
 
   // 防抖搜索
   useEffect(() => {
@@ -399,12 +401,7 @@ export default function ProductsPage() {
           setOfflineData(data.products);
           setOfflineMode(true); // 如果有离线数据，自动启用离线模式
           if (data.timestamp) {
-            const age = Date.now() - data.timestamp;
-            const oneDay = 24 * 60 * 60 * 1000;
-            // 如果数据超过1天，提示用户更新
-            if (age > oneDay) {
-              console.warn('离线数据已超过1天，建议更新');
-            }
+            setOfflineDataTimestamp(data.timestamp);
           }
         }
       }).catch((e) => {
@@ -475,8 +472,10 @@ export default function ProductsPage() {
       // 保存到IndexedDB（支持更大的数据量）
       if (typeof window !== 'undefined') {
         try {
+          const timestamp = Date.now();
           await saveOfflineProducts(allProducts);
           setOfflineData(allProducts);
+          setOfflineDataTimestamp(timestamp);
           setOfflineMode(true);
           alert(`成功下载 ${allProducts.length} 个产品数据到本地！`);
         } catch (saveError: any) {
@@ -1083,6 +1082,14 @@ export default function ProductsPage() {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.5;
+          }
+        }
         /* 产品信息项基础样式 - 确保标签和内容对齐 */
         .product-info-item {
           display: flex;
@@ -1882,54 +1889,132 @@ export default function ProductsPage() {
                 )}
               </div>
             )}
-            <button
-              onClick={downloadOfflineData}
-              disabled={downloadingOfflineData}
-              style={{
-                padding: '8px 16px',
-                background: downloadingOfflineData 
-                  ? '#d1d5db' 
-                  : offlineMode 
-                    ? '#f3f4f6' 
-                    : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                borderRadius: '8px',
-                border: 'none',
-                color: downloadingOfflineData 
-                  ? '#9ca3af' 
-                  : offlineMode 
-                    ? '#374151' 
-                    : '#fff',
-                fontSize: '13px',
-                fontWeight: 500,
-                cursor: downloadingOfflineData ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s ease',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                whiteSpace: 'nowrap',
-                boxShadow: !downloadingOfflineData && !offlineMode ? '0 2px 8px rgba(102, 126, 234, 0.3)' : 'none'
-              }}
-              onMouseEnter={(e) => {
-                if (!downloadingOfflineData && !offlineMode) {
-                  e.currentTarget.style.transform = 'translateY(-1px)';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!downloadingOfflineData && !offlineMode) {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.3)';
-                }
-              }}
-            >
-              {downloadingOfflineData ? (
-                <>⏳ 下载中...</>
-              ) : offlineMode ? (
-                <>🔄 更新离线数据</>
-              ) : (
-                <>💾 下载离线数据</>
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <button
+                onClick={downloadOfflineData}
+                disabled={downloadingOfflineData}
+                style={{
+                  padding: '8px 16px',
+                  background: downloadingOfflineData 
+                    ? '#d1d5db' 
+                    : offlineMode 
+                      ? (() => {
+                          // 检查是否超过一天
+                          if (offlineDataTimestamp) {
+                            const age = Date.now() - offlineDataTimestamp;
+                            const oneDay = 24 * 60 * 60 * 1000;
+                            if (age > oneDay) {
+                              return '#fee2e2'; // 红色背景提醒
+                            }
+                          }
+                          return '#f3f4f6';
+                        })()
+                      : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  borderRadius: '8px',
+                  border: offlineMode && offlineDataTimestamp && (Date.now() - offlineDataTimestamp > 24 * 60 * 60 * 1000)
+                    ? '2px solid #dc2626'
+                    : 'none',
+                  color: downloadingOfflineData 
+                    ? '#9ca3af' 
+                    : offlineMode 
+                      ? (() => {
+                          // 检查是否超过一天
+                          if (offlineDataTimestamp) {
+                            const age = Date.now() - offlineDataTimestamp;
+                            const oneDay = 24 * 60 * 60 * 1000;
+                            if (age > oneDay) {
+                              return '#dc2626'; // 红色文字提醒
+                            }
+                          }
+                          return '#374151';
+                        })()
+                      : '#fff',
+                  fontSize: '13px',
+                  fontWeight: offlineMode && offlineDataTimestamp && (Date.now() - offlineDataTimestamp > 24 * 60 * 60 * 1000)
+                    ? 700
+                    : 500,
+                  cursor: downloadingOfflineData ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  whiteSpace: 'nowrap',
+                  boxShadow: !downloadingOfflineData && !offlineMode ? '0 2px 8px rgba(102, 126, 234, 0.3)' : 'none',
+                  position: 'relative'
+                }}
+                onMouseEnter={(e) => {
+                  if (!downloadingOfflineData && !offlineMode) {
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(102, 126, 234, 0.4)';
+                  }
+                  if (offlineMode && offlineDataTimestamp) {
+                    setShowUpdateTooltip(true);
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!downloadingOfflineData && !offlineMode) {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(102, 126, 234, 0.3)';
+                  }
+                  setShowUpdateTooltip(false);
+                }}
+              >
+                {downloadingOfflineData ? (
+                  <>⏳ 下载中...</>
+                ) : offlineMode ? (
+                  <>
+                    🔄 更新离线数据
+                    {offlineDataTimestamp && (Date.now() - offlineDataTimestamp > 24 * 60 * 60 * 1000) && (
+                      <span style={{ 
+                        marginLeft: '4px',
+                        fontSize: '12px',
+                        animation: 'pulse 2s infinite'
+                      }}>⚠️</span>
+                    )}
+                  </>
+                ) : (
+                  <>💾 下载离线数据</>
+                )}
+              </button>
+              {showUpdateTooltip && offlineDataTimestamp && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: '100%',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    marginBottom: '8px',
+                    padding: '8px 12px',
+                    background: '#1f2937',
+                    color: '#fff',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    whiteSpace: 'nowrap',
+                    zIndex: 1000,
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                    pointerEvents: 'none'
+                  }}
+                >
+                  更新时间: {new Date(offlineDataTimestamp).toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                  {Date.now() - offlineDataTimestamp > 24 * 60 * 60 * 1000 && (
+                    <div style={{ 
+                      marginTop: '4px', 
+                      color: '#fca5a5',
+                      fontWeight: 600,
+                      fontSize: '11px'
+                    }}>
+                      ⚠️ 数据已过期，建议更新
+                    </div>
+                  )}
+                </div>
               )}
-            </button>
+            </div>
             {offlineMode && (
               <button
                 onClick={() => {
