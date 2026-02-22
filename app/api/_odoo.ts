@@ -7,7 +7,7 @@ const ALLOW_INSECURE_TLS = process.env.ALLOW_INSECURE_TLS === '1';
 const httpAgent = new http.Agent({ keepAlive: true });
 const httpsAgent = new https.Agent({ keepAlive: true, rejectUnauthorized: !ALLOW_INSECURE_TLS });
 
-const ALLOWED = (process.env.ODOO_ALLOWED_BASES || 'http://localhost:8069,https://moboplus.co.nz,https://repair.raytech.co.nz')
+const ALLOWED = (process.env.ODOO_ALLOWED_BASES || 'http://localhost:8069,https://shop.moboplus.co.nz,https://repair.raytech.co.nz')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);

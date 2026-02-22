@@ -69,7 +69,7 @@ http://localhost:3000/api/test-odoo-connection
 我已经在代码中添加了默认的允许base URL：
 
 ```typescript
-const ALLOWED = (process.env.ODOO_ALLOWED_BASES || 'http://localhost:8069,https://moboplus.co.nz,https://repair.raytech.co.nz')
+const ALLOWED = (process.env.ODOO_ALLOWED_BASES || 'http://localhost:8069,https://shop.moboplus.co.nz,https://repair.raytech.co.nz')
 ```
 
 如果需要自定义，可以设置环境变量：

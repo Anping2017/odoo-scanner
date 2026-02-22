@@ -2,8 +2,8 @@
 export type HostPreset = { url: string; db: string; defaultLocationId?: number };
 
 export const HOST_PRESETS: Record<string, HostPreset> = {
-  'moboplus.co.nz': {
-    url: 'https://moboplus.co.nz',
+  'shop.moboplus.co.nz': {
+    url: 'https://shop.moboplus.co.nz',
     db: 'test',
     defaultLocationId: 1, // TODO: 替换成真实 Internal 库位ID
   },
@@ -35,8 +35,8 @@ export function resolvePreset(hostRaw?: string): HostPreset | undefined {
     .replace(/^www\./, '')
     .split(':')[0]; // 去端口
 
-  // 容忍子域/二级域
-  if (h.endsWith('moboplus.co.nz')) return HOST_PRESETS['moboplus.co.nz'];
+  // 匹配 shop.moboplus.co.nz（旧域名 moboplus.co.nz 已不再使用）
+  if (h === 'shop.moboplus.co.nz') return HOST_PRESETS['shop.moboplus.co.nz'];
   if (h.endsWith('repair.raytech.co.nz') || h === 'raytech.co.nz')
     return HOST_PRESETS['repair.raytech.co.nz'];
   if (h === 'localhost') return HOST_PRESETS['localhost:8069'];

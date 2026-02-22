@@ -333,7 +333,7 @@ export default function UserGuidePage() {
 <h2>登录步骤</h2>
 
 <h3>1. 选择域名</h3>
-<p>从下拉菜单中选择对应的域名（如：moboplus.co.nz），系统会自动配置相应的数据库。</p>
+<p>从下拉菜单中选择对应的域名（如：shop.moboplus.co.nz），系统会自动配置相应的数据库。</p>
 
 <h3>2. 输入账号和密码</h3>
 <ul>

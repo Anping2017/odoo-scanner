@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 export type DomainPreset = { key: string; label: string; url: string; db: string };
 
 const PRESETS: DomainPreset[] = [
-  { key: 'moboplus.co.nz', label: 'https://moboplus.co.nz', url: 'https://moboplus.co.nz', db: 'test' },
+  { key: 'shop.moboplus.co.nz', label: 'https://shop.moboplus.co.nz', url: 'https://shop.moboplus.co.nz', db: 'test' },
   { key: 'repair.raytech.co.nz', label: 'https://repair.raytech.co.nz', url: 'https://repair.raytech.co.nz', db: 'db-raytech-repair' },
   { key: 'localhost:8069', label: 'http://localhost:8069', url: 'http://localhost:8069', db: 'test-odoo2' },
 ];
